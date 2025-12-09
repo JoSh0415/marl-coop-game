@@ -5,6 +5,9 @@ THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 BASE_DIR = os.path.dirname(THIS_DIR)
 
+COOK_TIME = 1500
+BURN_TIME = 2500
+
 def load_image(*path_parts):
     full_path = os.path.join(BASE_DIR, "assets", *path_parts)
     img = image.load(full_path).convert_alpha()
@@ -149,6 +152,9 @@ class CoopEnv:
         self.pot_state = "idle"
         self.dishes_ready = 0
 
+        self.serving_time = 0
+        self.serving_state = "idle"
+
         self.active_orders = []
         self.completed_orders = []
         self.failed_orders = []
@@ -200,8 +206,20 @@ class CoopEnv:
         if action2 == 5:
             self.handle_interact(agent=2)
         
-        if self.pot_state in ("idle", "start", "done", "burnt"):
-            pass
+        if self.pot_state in ("start", "done"):
+            self.pot_timer += 1
+
+            if self.pot_state == "start" and self.pot_timer >= COOK_TIME:
+                self.pot_state = "done"
+            elif self.pot_state == "done" and self.pot_timer >= BURN_TIME:
+                self.pot_state = "burnt"
+        
+        if self.serving_state.startswith("bowl-"):
+            self.serving_time += 1
+
+            if self.serving_time >= 100:
+                self.serving_state = "idle"
+                self.serving_time = 0
 
         reward = -0.01
         reward += (self.score - old_score) * 1.0
@@ -238,16 +256,15 @@ class CoopEnv:
                 self.pot_ingredients.append(holding)
                 holding = None
 
-                if len(self.pot_ingredients) == 1:
-                    self.pot_state = "start"   # started cooking
-                elif len(self.pot_ingredients) >= 2:
-                    self.pot_state = "done"
+                if len(self.pot_ingredients) >= 1:
+                    self.pot_state = "start"
             elif holding == "bowl" and self.pot_state != "idle":
                 bowl_state = f"bowl-{self.pot_state}"
                 holding = bowl_state
 
                 self.pot_ingredients.clear()
                 self.pot_state = "idle"
+                self.pot_timer = 0
 
             elif holding in ("bowl-start", "bowl-done", "bowl-burnt") and self.pot_state == "idle":
                 soup_state = holding.split("-", 1)[1]
@@ -258,8 +275,13 @@ class CoopEnv:
         elif tile == "S":
             if holding == "bowl-done":
                 self.score += 1
+                self.serving_state = "bowl-done"
                 holding = None
             elif holding in ("bowl-start", "bowl-burnt"):
+                if holding == "bowl-start":
+                    self.serving_state = "bowl-start"
+                else:
+                    self.serving_state = "bowl-burnt"
                 holding = None
         elif tile == "G" and holding is not None:
             holding = None
@@ -306,6 +328,11 @@ class CoopEnv:
         for (x, y), item_name in self.wall_items.items():
             sprite = self.item_sprites[item_name]
             screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
+        
+        if self.serving_state != "idle":
+            sprite = self.item_sprites[self.serving_state]
+            serving_x, serving_y = find_char(self.level, "S")
+            screen.blit(sprite, (serving_x * self.tile_size, serving_y * self.tile_size))
         
         font1 = font.SysFont(None, 24)
         score_surf = font1.render(f"Score: {self.score}", True, (255, 255, 255))
