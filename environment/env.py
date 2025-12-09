@@ -1,5 +1,14 @@
-from pygame import Rect, draw
+from pygame import *
+import os
 
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+
+BASE_DIR = os.path.dirname(THIS_DIR)
+
+def load_image(*path_parts):
+    full_path = os.path.join(BASE_DIR, "assets", *path_parts)
+    img = image.load(full_path).convert_alpha()
+    return img
 
 def find_char(grid, target):
     for y, row in enumerate(grid):
@@ -35,6 +44,39 @@ class CoopEnv:
         self.initial_agent2_pos = list(find_char(self.level, "B"))
 
         self.order_schedule = []
+
+        self.tile_sprites = {
+            " ": load_image("tiles", "floor.png"),
+            "#": load_image("tiles", "wall.png"),
+            "I": load_image("tiles", "ingredient-box-onion.png"),
+            "P": load_image("tiles", "pot-idle.png"),
+            "S": load_image("tiles", "serving-station.png"),
+        }
+        
+        self.agent1_sprites = {
+            ("up",    "empty"): load_image("agents", "agent1-up-empty.png"),
+            ("down",  "empty"): load_image("agents", "agent1-down-empty.png"),
+            ("left",  "empty"): load_image("agents", "agent1-left-empty.png"),
+            ("right", "empty"): load_image("agents", "agent1-right-empty.png"),
+        }
+
+        self.agent2_sprites = {
+            ("up",    "empty"): load_image("agents", "agent2-up-empty.png"),
+            ("down",  "empty"): load_image("agents", "agent2-down-empty.png"),
+            ("left",  "empty"): load_image("agents", "agent2-left-empty.png"),
+            ("right", "empty"): load_image("agents", "agent2-right-empty.png"),
+        }
+
+        for key, surf in self.tile_sprites.items():
+            self.tile_sprites[key] = transform.scale(surf, (self.tile_size, self.tile_size))
+            if key == "P":
+                self.tile_sprites[key] = transform.rotate(self.tile_sprites[key], 90)
+
+        for key, surf in self.agent1_sprites.items():
+            self.agent1_sprites[key] = transform.scale(surf, (self.tile_size, self.tile_size))
+        
+        for key, surf in self.agent2_sprites.items():
+            self.agent2_sprites[key] = transform.scale(surf, (self.tile_size, self.tile_size))
 
         self.reset()
 
@@ -156,27 +198,50 @@ class CoopEnv:
     def render(self, screen):
         for y, row in enumerate(self.level):
             for x, char in enumerate(row):
-                rect = Rect(x * self.tile_size, y * self.tile_size, self.tile_size, self.tile_size)
-
-                colour = (20, 20, 20)  
-
                 if char == "#":
-                    colour = (80, 80, 80)  # wall
+                    sprite = self.tile_sprites.get(char, self.tile_sprites["#"])
+                    screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
                 elif char == "I":
-                    colour = (200, 0, 0)   # ingredient
+                    sprite = self.tile_sprites.get(char, self.tile_sprites["I"])
+                    screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
                 elif char == "P":
-                    colour = (0, 0, 200)   # pot
+                    sprite = self.tile_sprites.get(char, self.tile_sprites["P"])
+                    screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
                 elif char == "S":
-                    colour = (0, 150, 0)   # serving station
-
-                draw.rect(screen, colour, rect)
-
-                draw.rect(screen, (50, 50, 50), rect, 1)
+                    sprite = self.tile_sprites.get(char, self.tile_sprites["S"])
+                    screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
+                elif char == " " or char == "A" or char == "B":
+                    sprite = self.tile_sprites.get(char, self.tile_sprites[" "])
+                    screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
 
         # Agent 1
-        a1_rect = Rect(self.agent1_pos[0] * self.tile_size, self.agent1_pos[1] * self.tile_size, self.tile_size, self.tile_size)
-        draw.rect(screen, (0, 0, 255), a1_rect)
+        dir_name = self._dir_to_name(self.agent1_dir)
+        carry_name = self._carry_to_name(self.agent1_holding)
+        sprite = self.agent1_sprites[(dir_name, carry_name)]
+        screen.blit(sprite, (self.agent1_pos[0] * self.tile_size,
+                            self.agent1_pos[1] * self.tile_size))
 
         # Agent 2
-        a2_rect = Rect(self.agent2_pos[0] * self.tile_size, self.agent2_pos[1] * self.tile_size, self.tile_size, self.tile_size)
-        draw.rect(screen, (255, 255, 0), a2_rect)
+        dir_name = self._dir_to_name(self.agent2_dir)
+        carry_name = self._carry_to_name(self.agent2_holding)
+        sprite = self.agent2_sprites[(dir_name, carry_name)]
+        screen.blit(sprite, (self.agent2_pos[0] * self.tile_size,
+                            self.agent2_pos[1] * self.tile_size))
+    
+    def _dir_to_name(self, direction):
+        if direction == (0, -1):
+            return "up"
+        elif direction == (0, 1):
+            return "down"
+        elif direction == (-1, 0):
+            return "left"
+        elif direction == (1, 0):
+            return "right"
+        else:
+            return "down"
+    
+    def _carry_to_name(self, holding):
+        if holding is None:
+            return "empty"
+        else:
+            return "ingredient"
