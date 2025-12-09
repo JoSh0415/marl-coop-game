@@ -51,20 +51,48 @@ class CoopEnv:
             "I": load_image("tiles", "ingredient-box-onion.png"),
             "P": load_image("tiles", "pot-idle.png"),
             "S": load_image("tiles", "serving-station.png"),
+            "J": load_image("tiles", "ingredient-box-tomato.png"),
+            "R": load_image("tiles", "bowl-rack.png"),
         }
         
         self.agent1_sprites = {
-            ("up",    "empty"): load_image("agents", "agent1-up-empty.png"),
-            ("down",  "empty"): load_image("agents", "agent1-down-empty.png"),
-            ("left",  "empty"): load_image("agents", "agent1-left-empty.png"),
-            ("right", "empty"): load_image("agents", "agent1-right-empty.png"),
+            ("up",    "empty"): load_image("agents", "up/agent1-up-empty.png"),
+            ("up",    "carry"): load_image("agents", "up/agent1-up-carry.png"),
+            ("down",  "empty"): load_image("agents", "down/agent1-down-empty.png"),
+            ("down",  "bowl"): load_image("agents", "down/agent1-down-bowl.png"),
+            ("down",  "onion"): load_image("agents", "down/agent1-down-onion.png"),
+            ("down",  "soup"): load_image("agents", "down/agent1-down-soup.png"),
+            ("down",  "tomato"): load_image("agents", "down/agent1-down-tomato.png"),
+            ("left",  "empty"): load_image("agents", "left/agent1-left-empty.png"),
+            ("left",  "bowl"): load_image("agents", "left/agent1-left-bowl.png"),
+            ("left",  "onion"): load_image("agents", "left/agent1-left-onion.png"),
+            ("left",  "soup"): load_image("agents", "left/agent1-left-soup.png"),
+            ("left",  "tomato"): load_image("agents", "left/agent1-left-tomato.png"),
+            ("right", "empty"): load_image("agents", "right/agent1-right-empty.png"),
+            ("right", "bowl"): load_image("agents", "right/agent1-right-bowl.png"),
+            ("right", "onion"): load_image("agents", "right/agent1-right-onion.png"),
+            ("right", "soup"): load_image("agents", "right/agent1-right-soup.png"),
+            ("right", "tomato"): load_image("agents", "right/agent1-right-tomato.png"),
         }
 
         self.agent2_sprites = {
-            ("up",    "empty"): load_image("agents", "agent2-up-empty.png"),
-            ("down",  "empty"): load_image("agents", "agent2-down-empty.png"),
-            ("left",  "empty"): load_image("agents", "agent2-left-empty.png"),
-            ("right", "empty"): load_image("agents", "agent2-right-empty.png"),
+            ("up",    "empty"): load_image("agents", "up/agent2-up-empty.png"),
+            ("up",    "carry"): load_image("agents", "up/agent2-up-carry.png"),
+            ("down",  "empty"): load_image("agents", "down/agent2-down-empty.png"),
+            ("down",  "bowl"): load_image("agents", "down/agent2-down-bowl.png"),
+            ("down",  "onion"): load_image("agents", "down/agent2-down-onion.png"),
+            ("down",  "soup"): load_image("agents", "down/agent2-down-soup.png"),
+            ("down",  "tomato"): load_image("agents", "down/agent2-down-tomato.png"),
+            ("left",  "empty"): load_image("agents", "left/agent2-left-empty.png"),
+            ("left",  "bowl"): load_image("agents", "left/agent2-left-bowl.png"),
+            ("left",  "onion"): load_image("agents", "left/agent2-left-onion.png"),
+            ("left",  "soup"): load_image("agents", "left/agent2-left-soup.png"),
+            ("left",  "tomato"): load_image("agents", "left/agent2-left-tomato.png"),
+            ("right", "empty"): load_image("agents", "right/agent2-right-empty.png"),
+            ("right", "bowl"): load_image("agents", "right/agent2-right-bowl.png"),
+            ("right", "onion"): load_image("agents", "right/agent2-right-onion.png"),
+            ("right", "soup"): load_image("agents", "right/agent2-right-soup.png"),
+            ("right", "tomato"): load_image("agents", "right/agent2-right-tomato.png"),
         }
 
         for key, surf in self.tile_sprites.items():
@@ -168,21 +196,24 @@ class CoopEnv:
         if tile is None:
             return 
 
-        if tile == "I" and holding is None:
-            holding = "ingredient"
-
-        elif tile == "P" and holding == "ingredient":
-            self.pot_ingredients.append("ingredient")
+        if tile == "I":
+            holding = "onion"
+            if agent == 1:
+                self.agent1_holding = holding
+            else:
+                self.agent2_holding = holding
+        elif tile == "J":
+            holding = "tomato"
+            if agent == 1:
+                self.agent1_holding = holding
+            else:
+                self.agent2_holding = holding
+        elif tile == "P" and holding in ("onion", "tomato"):
+            self.pot_ingredients.append(holding)
             holding = None
-
         elif tile == "S" and len(self.pot_ingredients) > 0:
             self.pot_ingredients.clear()
             self.score += 1
-
-        if agent == 1:
-            self.agent1_holding = holding
-        else:
-            self.agent2_holding = holding
 
     def tile_in_front(self, pos, direction):
         x, y = pos
@@ -198,25 +229,16 @@ class CoopEnv:
     def render(self, screen):
         for y, row in enumerate(self.level):
             for x, char in enumerate(row):
-                if char == "#":
-                    sprite = self.tile_sprites.get(char, self.tile_sprites["#"])
-                    screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
-                elif char == "I":
-                    sprite = self.tile_sprites.get(char, self.tile_sprites["I"])
-                    screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
-                elif char == "P":
-                    sprite = self.tile_sprites.get(char, self.tile_sprites["P"])
-                    screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
-                elif char == "S":
-                    sprite = self.tile_sprites.get(char, self.tile_sprites["S"])
-                    screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
-                elif char == " " or char == "A" or char == "B":
-                    sprite = self.tile_sprites.get(char, self.tile_sprites[" "])
-                    screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
+                if char == "A" or char == "B":
+                    char = " "
+                sprite = self.tile_sprites.get(char, self.tile_sprites[char])
+                screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
 
         # Agent 1
         dir_name = self._dir_to_name(self.agent1_dir)
         carry_name = self._carry_to_name(self.agent1_holding)
+        if dir_name == "up" and carry_name != "empty":
+            carry_name = "carry"
         sprite = self.agent1_sprites[(dir_name, carry_name)]
         screen.blit(sprite, (self.agent1_pos[0] * self.tile_size,
                             self.agent1_pos[1] * self.tile_size))
@@ -224,6 +246,8 @@ class CoopEnv:
         # Agent 2
         dir_name = self._dir_to_name(self.agent2_dir)
         carry_name = self._carry_to_name(self.agent2_holding)
+        if dir_name == "up" and carry_name != "empty":
+            carry_name = "carry"
         sprite = self.agent2_sprites[(dir_name, carry_name)]
         screen.blit(sprite, (self.agent2_pos[0] * self.tile_size,
                             self.agent2_pos[1] * self.tile_size))
@@ -243,5 +267,13 @@ class CoopEnv:
     def _carry_to_name(self, holding):
         if holding is None:
             return "empty"
+        elif holding == "bowl":
+            return "bowl"
+        elif holding == "onion":
+            return "onion"
+        elif holding == "tomato":
+            return "tomato"
+        elif holding == "soup":
+            return "soup"
         else:
-            return "ingredient"
+            return "empty"
