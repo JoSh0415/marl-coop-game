@@ -12,21 +12,23 @@ LEVEL = [
     "#    #    #",
     "#    #    P",
     "I    #    #",
-    "# A  #  B #",
+    "# B  #  A #",
     "#    #    #",
     "###########",
 ]
 
-env = CoopEnv(LEVEL, tile_size=tile_size, max_steps=1000)
-obs = env.reset()
-
-width = env.grid_width * tile_size
-height = env.grid_height * tile_size
+grid_width = len(LEVEL[0])
+grid_height = len(LEVEL)
+width = grid_width * tile_size
+height = grid_height * tile_size
 
 screen = display.set_mode((width, height))
 display.set_caption("MARL Cooperative Environment")
 
 clock = time.Clock()
+
+env = CoopEnv(LEVEL, tile_size=tile_size, max_steps=1000)
+obs = env.reset()
 
 running = True
 
