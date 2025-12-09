@@ -45,15 +45,28 @@ class CoopEnv:
 
         self.order_schedule = []
 
+        self.wall_items = {}
+
         self.tile_sprites = {
             " ": load_image("tiles", "floor.png"),
             "#": load_image("tiles", "wall.png"),
             "I": load_image("tiles", "ingredient-box-onion.png"),
-            "P": load_image("tiles", "pot-idle.png"),
             "S": load_image("tiles", "serving-station.png"),
             "J": load_image("tiles", "ingredient-box-tomato.png"),
             "R": load_image("tiles", "bowl-rack.png"),
+            "G": load_image("tiles", "garbage.png"),
         }
+
+        self.pot_sprites = {
+            "idle":  load_image("tiles", "pot-idle.png"),
+            "start":  load_image("tiles", "pot-start.png"),
+            "done":  load_image("tiles", "pot-done.png"),
+            "burnt": load_image("tiles", "pot-burnt.png"),
+        }
+
+        for key, surf in self.pot_sprites.items():
+            self.pot_sprites[key] = transform.scale(surf, (self.tile_size, self.tile_size))
+            self.pot_sprites[key] = transform.rotate(self.pot_sprites[key], 90)
         
         self.agent1_sprites = {
             ("up",    "empty"): load_image("agents", "up/agent1-up-empty.png"),
@@ -95,6 +108,15 @@ class CoopEnv:
             ("right", "tomato"): load_image("agents", "right/agent2-right-tomato.png"),
         }
 
+        self.item_sprites = {
+            "bowl-empty": load_image("items", "bowl-empty.png"),
+            "bowl-start": load_image("items", "bowl-start.png"),
+            "bowl-done": load_image("items", "bowl-done.png"),
+            "bowl-burnt": load_image("items", "bowl-burnt.png"),
+            "onion": load_image("items", "onion.png"),
+            "tomato": load_image("items", "tomato.png"),
+        }
+
         for key, surf in self.tile_sprites.items():
             self.tile_sprites[key] = transform.scale(surf, (self.tile_size, self.tile_size))
             if key == "P":
@@ -105,6 +127,9 @@ class CoopEnv:
         
         for key, surf in self.agent2_sprites.items():
             self.agent2_sprites[key] = transform.scale(surf, (self.tile_size, self.tile_size))
+
+        for key, surf in self.item_sprites.items():
+            self.item_sprites[key] = transform.scale(surf, (self.tile_size, self.tile_size))
 
         self.reset()
 
@@ -121,11 +146,14 @@ class CoopEnv:
 
         self.pot_ingredients = []
         self.pot_timer = 0
+        self.pot_state = "idle"
         self.dishes_ready = 0
 
         self.active_orders = []
         self.completed_orders = []
         self.failed_orders = []
+
+        self.wall_items.clear()
 
         return self.get_observation()
 
@@ -171,6 +199,9 @@ class CoopEnv:
 
         if action2 == 5:
             self.handle_interact(agent=2)
+        
+        if self.pot_state in ("idle", "start", "done", "burnt"):
+            pass
 
         reward = -0.01
         reward += (self.score - old_score) * 1.0
@@ -198,22 +229,44 @@ class CoopEnv:
 
         if tile == "I":
             holding = "onion"
-            if agent == 1:
-                self.agent1_holding = holding
-            else:
-                self.agent2_holding = holding
         elif tile == "J":
             holding = "tomato"
-            if agent == 1:
-                self.agent1_holding = holding
-            else:
-                self.agent2_holding = holding
-        elif tile == "P" and holding in ("onion", "tomato"):
-            self.pot_ingredients.append(holding)
-            holding = None
+        elif tile == "P" and holding is not None:
+            if holding in ("onion", "tomato"):
+                self.pot_ingredients.append(holding)
+                holding = None
+
+                if len(self.pot_ingredients) == 2:
+                    self.pot_state = "done"
+                elif len(self.pot_ingredients) == 1:
+                    self.pot_state = "start"
+                elif len(self.pot_ingredients) == 0:
+                    self.pot_state = "idle"
+                else:
+                    self.pot_state = "burnt"
+            elif holding == "bowl":
+                pass
         elif tile == "S" and len(self.pot_ingredients) > 0:
             self.pot_ingredients.clear()
             self.score += 1
+        elif tile == "G" and holding is not None:
+            holding = None
+        elif tile == "#":
+            key = (tx, ty)
+            item_here = self.wall_items.get(key)
+
+            if holding is None and item_here is not None:
+                holding = item_here
+                del self.wall_items[key]
+
+            elif holding is not None and item_here is None:
+                self.wall_items[key] = holding
+                holding = None
+        
+        if agent == 1:
+                self.agent1_holding = holding
+        else:
+            self.agent2_holding = holding
 
     def tile_in_front(self, pos, direction):
         x, y = pos
@@ -231,8 +284,16 @@ class CoopEnv:
             for x, char in enumerate(row):
                 if char == "A" or char == "B":
                     char = " "
-                sprite = self.tile_sprites.get(char, self.tile_sprites[char])
-                screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
+                if char == "P":
+                    pot_sprite = self.pot_sprites[self.pot_state]
+                    screen.blit(pot_sprite, (x * self.tile_size, y * self.tile_size))
+                else:
+                    sprite = self.tile_sprites[char]
+                    screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
+        
+        for (x, y), item_name in self.wall_items.items():
+            sprite = self.item_sprites[item_name]
+            screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
 
         # Agent 1
         dir_name = self._dir_to_name(self.agent1_dir)
@@ -268,12 +329,12 @@ class CoopEnv:
         if holding is None:
             return "empty"
         elif holding == "bowl":
-            return "bowl"
+            return "bowl-empty"
         elif holding == "onion":
             return "onion"
         elif holding == "tomato":
             return "tomato"
         elif holding == "soup":
-            return "soup"
+            return "bowl-done"
         else:
             return "empty"
