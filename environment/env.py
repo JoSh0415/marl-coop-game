@@ -109,7 +109,7 @@ class CoopEnv:
         }
 
         self.item_sprites = {
-            "bowl-empty": load_image("items", "bowl-empty.png"),
+            "bowl": load_image("items", "bowl-empty.png"),
             "bowl-start": load_image("items", "bowl-start.png"),
             "bowl-done": load_image("items", "bowl-done.png"),
             "bowl-burnt": load_image("items", "bowl-burnt.png"),
@@ -231,24 +231,36 @@ class CoopEnv:
             holding = "onion"
         elif tile == "J":
             holding = "tomato"
+        elif tile == "R" and holding is None:
+            holding = "bowl"
         elif tile == "P" and holding is not None:
             if holding in ("onion", "tomato"):
                 self.pot_ingredients.append(holding)
                 holding = None
 
-                if len(self.pot_ingredients) == 2:
+                if len(self.pot_ingredients) == 1:
+                    self.pot_state = "start"   # started cooking
+                elif len(self.pot_ingredients) >= 2:
                     self.pot_state = "done"
-                elif len(self.pot_ingredients) == 1:
-                    self.pot_state = "start"
-                elif len(self.pot_ingredients) == 0:
-                    self.pot_state = "idle"
-                else:
-                    self.pot_state = "burnt"
-            elif holding == "bowl":
-                pass
-        elif tile == "S" and len(self.pot_ingredients) > 0:
-            self.pot_ingredients.clear()
-            self.score += 1
+            elif holding == "bowl" and self.pot_state != "idle":
+                bowl_state = f"bowl-{self.pot_state}"
+                holding = bowl_state
+
+                self.pot_ingredients.clear()
+                self.pot_state = "idle"
+
+            elif holding in ("bowl-start", "bowl-done", "bowl-burnt") and self.pot_state == "idle":
+                soup_state = holding.split("-", 1)[1]
+                self.pot_state = soup_state
+
+                self.pot_ingredients = ["soup"]
+                holding = "bowl"
+        elif tile == "S":
+            if holding == "bowl-done":
+                self.score += 1
+                holding = None
+            elif holding in ("bowl-start", "bowl-burnt"):
+                holding = None
         elif tile == "G" and holding is not None:
             holding = None
         elif tile == "#":
@@ -294,6 +306,10 @@ class CoopEnv:
         for (x, y), item_name in self.wall_items.items():
             sprite = self.item_sprites[item_name]
             screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
+        
+        font1 = font.SysFont(None, 24)
+        score_surf = font1.render(f"Score: {self.score}", True, (255, 255, 255))
+        screen.blit(score_surf, (10, 10))
 
         # Agent 1
         dir_name = self._dir_to_name(self.agent1_dir)
@@ -329,12 +345,12 @@ class CoopEnv:
         if holding is None:
             return "empty"
         elif holding == "bowl":
-            return "bowl-empty"
+            return "bowl"
         elif holding == "onion":
             return "onion"
         elif holding == "tomato":
             return "tomato"
-        elif holding == "soup":
-            return "bowl-done"
+        elif holding.startswith("bowl-"):
+            return "soup"
         else:
             return "empty"
