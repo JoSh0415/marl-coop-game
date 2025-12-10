@@ -407,8 +407,8 @@ class CoopEnv:
 
         if orders_to_show:
             font_orders = font.SysFont("arial", 18)
-            start_x = 180          # where the first pill starts
-            y = 10                 # vertical position in the header
+            start_x = 150
+            y = 10
             card_w = 170
             card_h = 30
             gap = 8
@@ -421,7 +421,7 @@ class CoopEnv:
                 border_color = (110, 110, 170)
 
                 if remaining < 300:
-                    border_color = (200, 90, 90)   # red
+                    border_color = (200, 90, 90)
 
                 rect = Rect(x, y, card_w, card_h)
                 draw.rect(screen, fill_color, rect, border_radius=8)
@@ -447,10 +447,10 @@ class CoopEnv:
                         font1 = font.SysFont("arial", 16, bold=True)
 
                         if self.pot_state == "start":
-                            pot_time = font1.render(f"{COOK_TIME - self.pot_timer}", True, (255, 255, 255))
+                            pot_time = font1.render(f"{(COOK_TIME - self.pot_timer) / 60:.1f}", True, (255, 255, 255))
 
                         elif self.pot_state == "done":
-                            pot_time = font1.render(f"{BURN_TIME - self.pot_timer}", True, (0, 255, 0))
+                            pot_time = font1.render(f"{(BURN_TIME - self.pot_timer) / 60:.1f}", True, (0, 255, 0))
 
                         else:
                             if (self.step_count // 10) % 2 == 0:
