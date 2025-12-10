@@ -159,7 +159,9 @@ class CoopEnv:
         self.agent1_holding = None
         self.agent2_holding = None
 
-        self.pot_ingredients = []
+        self.pot_onions = 0
+        self.pot_tomatoes = 0
+        self.pot_recipe = None
         self.pot_timer = 0
         self.pot_state = "idle"
         self.dishes_ready = 0
@@ -202,6 +204,8 @@ class CoopEnv:
                     "meal": order["meal"],
                     "start": order["start"],
                     "deadline": order["start"] + self.order_time,
+                    "onions": order["onions"],
+                    "tomatoes": order["tomatoes"],
                     "served": False,
                 }
                 new_active.append(order_runtime)
@@ -304,59 +308,91 @@ class CoopEnv:
 
         elif tile == "P" and holding is not None:
             if holding in ("onion", "tomato"):
-                self.pot_ingredients.append(holding)
+                if holding == "onion":
+                    self.pot_onions += 1
+                else:
+                    self.pot_tomatoes += 1
+
                 holding = None
 
-                if len(self.pot_ingredients) >= 1:
+                if self.pot_onions + self.pot_tomatoes > 0 and self.pot_state == "idle":
                     self.pot_state = "start"
+                    self.pot_timer = 0
+                
+                self.pot_recipe = self._counts_to_recipe(self.pot_onions, self.pot_tomatoes)
 
             elif holding == "bowl" and self.pot_state != "idle":
-                bowl_state = f"bowl-{self.pot_state}"
+                soup_name = self.pot_recipe or "invalid"
+                bowl_state = f"bowl-{self.pot_state}-{soup_name}"
                 holding = bowl_state
-
-                self.pot_ingredients.clear()
+                self.pot_onions = 0
+                self.pot_tomatoes = 0
+                self.pot_recipe = None
                 self.pot_state = "idle"
                 self.pot_timer = 0
 
-            elif holding in ("bowl-start", "bowl-done", "bowl-burnt") and self.pot_state == "idle":
-                soup_state = holding.split("-", 1)[1]
-                self.pot_state = soup_state
-
-                self.pot_ingredients = ["soup"]
-                holding = "bowl"
+            elif isinstance(holding, str) and holding.startswith("bowl-") and self.pot_state == "idle":
+                parts = holding.split("-", 2)
+                if len(parts) == 3:
+                    _, state, recipe = parts
+                    self.pot_state = state
+                    self.pot_recipe = recipe
+                    onions, tomatoes = self._recipe_to_counts(recipe)
+                    if onions is not None:
+                        self.pot_onions = onions
+                        self.pot_tomatoes = tomatoes
+                        self.pot_timer = 0
+                        holding = "bowl"
 
         elif tile == "S":
-            if holding == "bowl-done":
-                served_correct = False
-
-                for order in self.active_orders:
-                    if not order["served"] and order["meal"] == "onion-soup":
-                        order["served"] = True
-                        self.completed_orders.append(order)
-                        served_correct = True
-                        break
-
-                if served_correct:
-                    self.score += 1
-                    self.reward += 1
-                    self.serving_state = "bowl-done"
-                    self.feedback_text = "Correct order!"
-                    self.feedback_color = (80, 220, 120)
+            if isinstance(holding, str) and holding.startswith("bowl-"):
+                parts = holding.split("-", 2)
+                if len(parts) == 3:
+                    _, soup_state, soup_recipe = parts
                 else:
-                    self.reward -= 0.5
-                    self.serving_state = "bowl-done"
-                    self.feedback_text = "Wrong order!"
+                    soup_state = "unknown"
+                    soup_recipe = "invalid"
+
+                soup_onions, soup_tomatoes = self._recipe_to_counts(soup_recipe)
+
+                if soup_state == "done" and soup_onions is not None:
+                    served_correct = False
+
+                    for order in self.active_orders:
+                        if not order["served"]:
+                            if (order["onions"] == soup_onions and
+                                order["tomatoes"] == soup_tomatoes):
+                                order["served"] = True
+                                self.completed_orders.append(order)
+                                served_correct = True
+                                break
+
+                    if served_correct:
+                        self.score += 1
+                        self.reward += 1
+                        self.serving_state = "bowl-done"
+                        nice_name = soup_recipe.replace("-", " ")
+                        self.feedback_text = f"Correct: {nice_name}!"
+                        self.feedback_color = (80, 220, 120)
+                    else:
+                        self.reward -= 0.5
+                        self.serving_state = "bowl-done"
+                        self.feedback_text = "Wrong order!"
+                        self.feedback_color = (220, 80, 80)
+
+                    holding = None
+
+                else:
+                    self.reward -= 0.25
+
+                    if soup_state in ("start", "burnt"):
+                        self.serving_state = f"bowl-{soup_state}"
+                    else:
+                        self.serving_state = "bowl-burnt"
+
+                    self.feedback_text = "Undercooked / burnt / invalid soup!"
                     self.feedback_color = (220, 80, 80)
-
-                holding = None
-
-            elif holding in ("bowl-start", "bowl-burnt"):
-                self.reward -= 0.25
-                self.score += 0.5
-                self.serving_state = holding
-                holding = None
-                self.feedback_text = "Undercooked / burnt soup!"
-                self.feedback_color = (220, 80, 80)
+                    holding = None
 
         elif tile == "G" and holding is not None:
             holding = None
@@ -409,9 +445,11 @@ class CoopEnv:
             font_orders = font.SysFont("arial", 18)
             start_x = 150
             y = 10
-            card_w = 170
+            card_w = 180
             card_h = 30
             gap = 8
+
+            num = len(self.orders)
 
             for i, order in enumerate(orders_to_show[:4]):
                 remaining = max(0, order["deadline"] - self.step_count)
@@ -429,7 +467,8 @@ class CoopEnv:
 
                 meal_name = order["meal"].replace("-", " ")
                 seconds_left = remaining / 60.0
-                text = f"{meal_name} ({seconds_left:.1f}s)"
+                print(num, len(self.pending_orders), len(self.active_orders), i)
+                text = f"{num - (len(self.pending_orders) + len(self.active_orders)) + i + 1 + len(self.completed_orders)}. {meal_name} ({seconds_left:.1f}s)"
                 text_surf = font_orders.render(text, True, self.header_text_color)
                 text_rect = text_surf.get_rect(center=rect.center)
                 screen.blit(text_surf, text_rect)
@@ -468,6 +507,12 @@ class CoopEnv:
                     screen.blit(sprite, (x * self.tile_size, y * self.tile_size + self.header_size))
         
         for (x, y), item_name in self.wall_items.items():
+            if item_name.startswith("bowl-done"):
+                item_name = "bowl-done"
+            elif item_name.startswith("bowl-start"):
+                item_name = "bowl-start"
+            elif item_name.startswith("bowl-burnt"):
+                item_name = "bowl-burnt"
             sprite = self.item_sprites[item_name]
             screen.blit(sprite, (x * self.tile_size, y * self.tile_size + self.header_size))
         
@@ -521,3 +566,23 @@ class CoopEnv:
             return "soup"
         else:
             return "empty"
+    
+    def _counts_to_recipe(self, onions, tomatoes):
+        if onions == 1 and tomatoes == 0:
+            return "onion-soup"
+        elif onions == 0 and tomatoes == 1:
+            return "tomato-soup"
+        elif onions == 1 and tomatoes == 1:
+            return "onion-tomato-soup"
+        else:
+            return None
+
+    def _recipe_to_counts(self, recipe):
+        if recipe == "onion-soup":
+            return 1, 0
+        elif recipe == "tomato-soup":
+            return 0, 1
+        elif recipe == "onion-tomato-soup":
+            return 1, 1
+        else:
+            return None, None
