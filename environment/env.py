@@ -453,7 +453,11 @@ class CoopEnv:
                             pot_time = font1.render(f"{BURN_TIME - self.pot_timer}", True, (0, 255, 0))
 
                         else:
-                            pot_time = font1.render("0", True, (255, 0, 0))
+                            if (self.step_count // 10) % 2 == 0:
+                                color = (255, 0, 0)
+                            else:
+                                color = (255, 100, 100)
+                            pot_time = font1.render("!", True, color)
 
                         pot_rect = pot_time.get_rect(center=(x * self.tile_size + self.tile_size // 2,
                                                     y * self.tile_size + self.header_size + self.tile_size // 2))
