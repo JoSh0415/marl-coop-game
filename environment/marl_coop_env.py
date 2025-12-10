@@ -6,7 +6,7 @@ init()
 
 tile_size = 60
 
-LEVEL = [
+LEVEL1 = [
     "###S#######",
     "#    #    #",
     "#    #    #",
@@ -17,8 +17,14 @@ LEVEL = [
     "##R########",
 ]
 
-grid_width = len(LEVEL[0])
-grid_height = len(LEVEL)
+ORDERS1 = [
+    {"meal": "onion-soup", "start": 0}, 
+    {"meal": "onion-soup", "start": 1000}, 
+    {"meal": "onion-soup", "start": 2000}
+]
+
+grid_width = len(LEVEL1[0])
+grid_height = len(LEVEL1)
 width = grid_width * tile_size
 height = grid_height * tile_size
 
@@ -27,7 +33,7 @@ display.set_caption("MARL Cooperative Environment")
 
 clock = time.Clock()
 
-env = CoopEnv(LEVEL, tile_size=tile_size, max_steps=1000)
+env = CoopEnv(LEVEL1, ORDERS1, tile_size=tile_size, max_steps=1000, order_time = 2400)
 obs = env.reset()
 
 running = True
