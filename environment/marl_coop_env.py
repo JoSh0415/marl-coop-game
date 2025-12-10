@@ -15,13 +15,13 @@ LEVEL1 = [
     "I    #    #",
     "# B  #  A #",
     "#    #    G",
-    "##R########",
+    "##R#####J##",
 ]
 
 ORDERS1 = [
     {"meal": "onion-soup", "onions": 1, "tomatoes": 0, "start": 0}, 
-    {"meal": "onion-soup", "onions": 1, "tomatoes": 0, "start": 1500}, 
-    {"meal": "onion-soup", "onions": 1, "tomatoes": 0, "start": 3000}
+    {"meal": "tomato-soup", "onions": 0, "tomatoes": 1, "start": 1500}, 
+    {"meal": "onion-tomato-soup", "onions": 1, "tomatoes": 1, "start": 3000}
 ]
 
 grid_width = len(LEVEL1[0])

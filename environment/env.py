@@ -150,7 +150,6 @@ class CoopEnv:
     def reset(self):
         self.step_count = 0
         self.score = 0
-        self.reward = 0
 
         self.agent1_pos = list(self.initial_agent1_pos)
         self.agent2_pos = list(self.initial_agent2_pos)
@@ -196,6 +195,8 @@ class CoopEnv:
         return (obs_agent1, obs_agent2)
 
     def step(self, action1, action2):
+        reward = -0.01
+
         new_active = []
         still_pending = []
         for order in self.pending_orders:
@@ -219,6 +220,7 @@ class CoopEnv:
         for order in self.active_orders:
             if not order["served"] and self.step_count > order["deadline"]:
                 self.failed_orders.append(order)
+                reward -= 1.0
 
             else:
                 still_active.append(order)
@@ -253,10 +255,10 @@ class CoopEnv:
                 self.agent2_pos = list(candidate2)
         
         if action1 == 5:
-            self.handle_interact(agent=1)
+            reward += self.handle_interact(agent=1)
 
         if action2 == 5:
-            self.handle_interact(agent=2)
+            reward += self.handle_interact(agent=2)
         
         if self.pot_state in ("start", "done"):
             self.pot_timer += 1
@@ -274,15 +276,15 @@ class CoopEnv:
                 self.serving_state = "idle"
                 self.serving_time = 0
 
-        self.reward = -0.01
-
         done = self.step_count >= self.max_steps
 
         obs = self.get_observation()
         info = {}
-        return obs, self.reward, done, info
+        return obs, reward, done, info
 
     def handle_interact(self, agent):
+        reward = 0
+        
         if agent == 1:
             pos = self.agent1_pos
             direction = self.agent1_dir
@@ -295,7 +297,7 @@ class CoopEnv:
         tile, (tx, ty) = self.tile_in_front(pos, direction)
 
         if tile is None:
-            return 
+            return 0
 
         if tile == "I":
             holding = "onion"
@@ -308,6 +310,12 @@ class CoopEnv:
 
         elif tile == "P" and holding is not None:
             if holding in ("onion", "tomato"):
+                if self.pot_state == "done":
+                    self.pot_state = "start"
+                    self.pot_timer = 1000
+                elif self.pot_state == "start":
+                    self.pot_timer = max(0, self.pot_timer - 500)
+
                 if holding == "onion":
                     self.pot_onions += 1
                 else:
@@ -369,13 +377,13 @@ class CoopEnv:
 
                     if served_correct:
                         self.score += 1
-                        self.reward += 1
+                        reward += 1
                         self.serving_state = "bowl-done"
                         nice_name = soup_recipe.replace("-", " ")
                         self.feedback_text = f"Correct: {nice_name}!"
                         self.feedback_color = (80, 220, 120)
                     else:
-                        self.reward -= 0.5
+                        reward -= 0.5
                         self.serving_state = "bowl-done"
                         self.feedback_text = "Wrong order!"
                         self.feedback_color = (220, 80, 80)
@@ -383,7 +391,7 @@ class CoopEnv:
                     holding = None
 
                 else:
-                    self.reward -= 0.25
+                    reward -= 0.25
 
                     if soup_state in ("start", "burnt"):
                         self.serving_state = f"bowl-{soup_state}"
@@ -393,7 +401,7 @@ class CoopEnv:
                     self.feedback_text = "Undercooked / burnt / invalid soup!"
                     self.feedback_color = (220, 80, 80)
                     holding = None
-
+        
         elif tile == "G" and holding is not None:
             holding = None
 
@@ -413,6 +421,8 @@ class CoopEnv:
                 self.agent1_holding = holding
         else:
             self.agent2_holding = holding
+        
+        return reward
 
     def tile_in_front(self, pos, direction):
         x, y = pos
@@ -449,8 +459,6 @@ class CoopEnv:
             card_h = 30
             gap = 8
 
-            num = len(self.orders)
-
             for i, order in enumerate(orders_to_show[:4]):
                 remaining = max(0, order["deadline"] - self.step_count)
                 x = start_x + i * (card_w + gap)
@@ -467,8 +475,7 @@ class CoopEnv:
 
                 meal_name = order["meal"].replace("-", " ")
                 seconds_left = remaining / 60.0
-                print(num, len(self.pending_orders), len(self.active_orders), i)
-                text = f"{num - (len(self.pending_orders) + len(self.active_orders)) + i + 1 + len(self.completed_orders)}. {meal_name} ({seconds_left:.1f}s)"
+                text = f"{meal_name} ({seconds_left:.1f}s)"
                 text_surf = font_orders.render(text, True, self.header_text_color)
                 text_rect = text_surf.get_rect(center=rect.center)
                 screen.blit(text_surf, text_rect)
