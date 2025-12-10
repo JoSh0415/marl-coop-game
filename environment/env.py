@@ -221,7 +221,7 @@ class CoopEnv:
             if not order["served"] and self.step_count > order["deadline"]:
                 self.failed_orders.append(order)
                 reward -= 1.0
-
+                print(self.step_count, "Failed order:", order)
             else:
                 still_active.append(order)
 
@@ -382,11 +382,13 @@ class CoopEnv:
                         nice_name = soup_recipe.replace("-", " ")
                         self.feedback_text = f"Correct: {nice_name}!"
                         self.feedback_color = (80, 220, 120)
+                        print(self.step_count, "Served:", soup_recipe, soup_state, "-> Correct")
                     else:
                         reward -= 0.5
                         self.serving_state = "bowl-done"
                         self.feedback_text = "Wrong order!"
                         self.feedback_color = (220, 80, 80)
+                        print(self.step_count, "Served:", soup_recipe, soup_state, "-> Wrong order")
 
                     holding = None
 
@@ -401,6 +403,7 @@ class CoopEnv:
                     self.feedback_text = "Undercooked / burnt / invalid soup!"
                     self.feedback_color = (220, 80, 80)
                     holding = None
+                    print(self.step_count, "Served:", soup_recipe, soup_state, "-> Undercooked / burnt / invalid")
         
         elif tile == "G" and holding is not None:
             holding = None
@@ -441,44 +444,72 @@ class CoopEnv:
 
         font1 = font.SysFont("arial", 24, bold=True)
         score_text = font1.render(f"Score: {self.score}", True, self.header_text_color)
-        screen.blit(score_text, (10, 10))
+        screen.blit(score_text, (10, 13))
 
         if self.feedback_text:
             font_feedback = font.SysFont("arial", 20)
             feedback_surf = font_feedback.render(self.feedback_text, True, self.feedback_color)
             screen.blit(feedback_surf, (10, 50))
 
-        orders_to_show = [o for o in self.active_orders if not o.get("served", False)]
+        orders_to_show = [o for o in self.active_orders if not o.get("served")]
         orders_to_show = sorted(orders_to_show, key=lambda o: o["deadline"])
 
         if orders_to_show:
             font_orders = font.SysFont("arial", 18)
             start_x = 150
             y = 10
-            card_w = 180
-            card_h = 30
             gap = 8
 
-            for i, order in enumerate(orders_to_show[:4]):
+            icon_size = 26
+            icon_gap = 4
+            onion_icon_small = transform.smoothscale(self.item_sprites["onion"], (icon_size, icon_size))
+            tomato_icon_small = transform.smoothscale(self.item_sprites["tomato"], (icon_size, icon_size))
+
+            x = start_x
+
+            for order in orders_to_show[:4]:
                 remaining = max(0, order["deadline"] - self.step_count)
-                x = start_x + i * (card_w + gap)
 
                 fill_color = (45, 45, 75)
                 border_color = (110, 110, 170)
-
                 if remaining < 300:
                     border_color = (200, 90, 90)
+
+                onions = order.get("onions", 0)
+                tomatoes = order.get("tomatoes", 0)
+                total_icons = onions + tomatoes
+
+                seconds_left = remaining / 60.0
+                time_text = f"{seconds_left:.1f}s"
+                time_surf = font_orders.render(time_text, True, self.header_text_color)
+
+                icons_width = 0
+                if total_icons > 0:
+                    icons_width = total_icons * icon_size + (total_icons - 1) * icon_gap
+
+                card_w = 40 + icons_width + time_surf.get_width() + 20
+                card_h = 32
 
                 rect = Rect(x, y, card_w, card_h)
                 draw.rect(screen, fill_color, rect, border_radius=8)
                 draw.rect(screen, border_color, rect, width=2, border_radius=8)
 
-                meal_name = order["meal"].replace("-", " ")
-                seconds_left = remaining / 60.0
-                text = f"{meal_name} ({seconds_left:.1f}s)"
-                text_surf = font_orders.render(text, True, self.header_text_color)
-                text_rect = text_surf.get_rect(center=rect.center)
-                screen.blit(text_surf, text_rect)
+                icon_y = y + (card_h - icon_size) // 2
+                icon_x = x + 10
+
+                for _ in range(onions):
+                    screen.blit(onion_icon_small, (icon_x, icon_y))
+                    icon_x += icon_size + icon_gap
+
+                for _ in range(tomatoes):
+                    screen.blit(tomato_icon_small, (icon_x, icon_y))
+                    icon_x += icon_size + icon_gap
+
+                time_rect = time_surf.get_rect()
+                time_rect.midright = (x + card_w - 10, y + card_h // 2)
+                screen.blit(time_surf, time_rect)
+
+                x += card_w + gap
 
         for y, row in enumerate(self.level):
             for x, char in enumerate(row):
