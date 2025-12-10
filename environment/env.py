@@ -35,8 +35,10 @@ def action_to_delta(action):
         return (0, 0)
 
 class CoopEnv:
-    def __init__(self, level, tile_size=60, max_steps=1000):
+    def __init__(self, level, orders, tile_size=60, max_steps=1000, order_time=3500):
         self.level = level
+        self.orders = orders
+        self.order_time = order_time
         self.grid_width = len(self.level[0])
         self.grid_height = len(self.level)
 
@@ -46,7 +48,9 @@ class CoopEnv:
         self.initial_agent1_pos = list(find_char(self.level, "A"))
         self.initial_agent2_pos = list(find_char(self.level, "B"))
 
-        self.order_schedule = []
+        self.active_orders = []
+        self.completed_orders = []
+        self.failed_orders = []
 
         self.wall_items = {}
 
@@ -139,6 +143,7 @@ class CoopEnv:
     def reset(self):
         self.step_count = 0
         self.score = 0
+        self.reward = 0
 
         self.agent1_pos = list(self.initial_agent1_pos)
         self.agent2_pos = list(self.initial_agent2_pos)
@@ -155,9 +160,10 @@ class CoopEnv:
         self.serving_time = 0
         self.serving_state = "idle"
 
-        self.active_orders = []
-        self.completed_orders = []
-        self.failed_orders = []
+        self.pending_orders = list(self.orders)
+        self.active_orders.clear()
+        self.completed_orders.clear()
+        self.failed_orders.clear()
 
         self.wall_items.clear()
 
@@ -177,6 +183,33 @@ class CoopEnv:
         return (obs_agent1, obs_agent2)
 
     def step(self, action1, action2):
+        new_active = []
+        still_pending = []
+        for order in self.pending_orders:
+            if self.step_count >= order["start"]:
+                order_runtime = {
+                    "meal": order["meal"],
+                    "start": order["start"],
+                    "deadline": order["start"] + self.order_time,
+                    "served": False,
+                }
+                new_active.append(order_runtime)
+            else:
+                still_pending.append(order)
+
+        self.pending_orders = still_pending
+        self.active_orders.extend(new_active)
+
+        still_active = []
+        for order in self.active_orders:
+            if not order["served"] and self.step_count > order["deadline"]:
+                self.failed_orders.append(order)
+
+            else:
+                still_active.append(order)
+
+        self.active_orders = still_active
+
         old_score = self.score
 
         self.step_count += 1
@@ -211,6 +244,7 @@ class CoopEnv:
 
             if self.pot_state == "start" and self.pot_timer >= COOK_TIME:
                 self.pot_state = "done"
+
             elif self.pot_state == "done" and self.pot_timer >= BURN_TIME:
                 self.pot_state = "burnt"
         
@@ -221,14 +255,13 @@ class CoopEnv:
                 self.serving_state = "idle"
                 self.serving_time = 0
 
-        reward = -0.01
-        reward += (self.score - old_score) * 1.0
+        self.reward = -0.01
 
         done = self.step_count >= self.max_steps
 
         obs = self.get_observation()
         info = {}
-        return obs, reward, done, info
+        return obs, self.reward, done, info
 
     def handle_interact(self, agent):
         if agent == 1:
@@ -247,10 +280,13 @@ class CoopEnv:
 
         if tile == "I":
             holding = "onion"
+
         elif tile == "J":
             holding = "tomato"
+
         elif tile == "R" and holding is None:
             holding = "bowl"
+
         elif tile == "P" and holding is not None:
             if holding in ("onion", "tomato"):
                 self.pot_ingredients.append(holding)
@@ -258,6 +294,7 @@ class CoopEnv:
 
                 if len(self.pot_ingredients) >= 1:
                     self.pot_state = "start"
+
             elif holding == "bowl" and self.pot_state != "idle":
                 bowl_state = f"bowl-{self.pot_state}"
                 holding = bowl_state
@@ -272,19 +309,36 @@ class CoopEnv:
 
                 self.pot_ingredients = ["soup"]
                 holding = "bowl"
+
         elif tile == "S":
             if holding == "bowl-done":
-                self.score += 1
-                self.serving_state = "bowl-done"
-                holding = None
-            elif holding in ("bowl-start", "bowl-burnt"):
-                if holding == "bowl-start":
-                    self.serving_state = "bowl-start"
+                served_correct = False
+
+                for order in self.active_orders:
+                    if not order["served"] and order["meal"] == "onion-soup":
+                        order["served"] = True
+                        self.completed_orders.append(order)
+                        served_correct = True
+                        break
+
+                if served_correct:
+                    self.score += 1
+                    self.reward += 1
+                    self.serving_state = "bowl-done"
                 else:
-                    self.serving_state = "bowl-burnt"
+                    self.reward -= 0.5
+                    self.serving_state = "bowl-done"
+
                 holding = None
+
+            elif holding in ("bowl-start", "bowl-burnt"):
+                self.reward -= 0.5
+                self.serving_state = holding
+                holding = None
+
         elif tile == "G" and holding is not None:
             holding = None
+
         elif tile == "#":
             key = (tx, ty)
             item_here = self.wall_items.get(key)
