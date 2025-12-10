@@ -5,6 +5,7 @@ from env import CoopEnv
 init()
 
 tile_size = 60
+header_size = 80
 
 LEVEL1 = [
     "###S#######",
@@ -19,21 +20,21 @@ LEVEL1 = [
 
 ORDERS1 = [
     {"meal": "onion-soup", "start": 0}, 
-    {"meal": "onion-soup", "start": 1000}, 
-    {"meal": "onion-soup", "start": 2000}
+    {"meal": "onion-soup", "start": 1300}, 
+    {"meal": "onion-soup", "start": 2600}
 ]
 
 grid_width = len(LEVEL1[0])
 grid_height = len(LEVEL1)
 width = grid_width * tile_size
-height = grid_height * tile_size
+height = grid_height * tile_size + header_size
 
 screen = display.set_mode((width, height))
 display.set_caption("MARL Cooperative Environment")
 
 clock = time.Clock()
 
-env = CoopEnv(LEVEL1, ORDERS1, tile_size=tile_size, max_steps=1000, order_time = 2400)
+env = CoopEnv(LEVEL1, ORDERS1, tile_size=tile_size, max_steps=1000, order_time = 3600, header_size=header_size)
 obs = env.reset()
 
 running = True

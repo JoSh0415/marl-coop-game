@@ -35,7 +35,7 @@ def action_to_delta(action):
         return (0, 0)
 
 class CoopEnv:
-    def __init__(self, level, orders, tile_size=60, max_steps=1000, order_time=3500):
+    def __init__(self, level, orders, tile_size=60, max_steps=1000, order_time=3600, header_size=0):
         self.level = level
         self.orders = orders
         self.order_time = order_time
@@ -44,6 +44,10 @@ class CoopEnv:
 
         self.tile_size = tile_size
         self.max_steps = max_steps
+        self.header_size = header_size
+
+        self.header_bg_color = (30, 30, 45)
+        self.header_text_color = (240, 240, 240)
 
         self.initial_agent1_pos = list(find_char(self.level, "A"))
         self.initial_agent2_pos = list(find_char(self.level, "B"))
@@ -51,6 +55,9 @@ class CoopEnv:
         self.active_orders = []
         self.completed_orders = []
         self.failed_orders = []
+
+        self.feedback_text = ""
+        self.feedback_color = self.header_text_color
 
         self.wall_items = {}
 
@@ -157,6 +164,10 @@ class CoopEnv:
         self.pot_state = "idle"
         self.dishes_ready = 0
 
+        self.feedback_text = ""
+        self.feedback_color = self.header_text_color
+        self.feedback_timer = 0
+
         self.serving_time = 0
         self.serving_state = "idle"
 
@@ -210,7 +221,11 @@ class CoopEnv:
 
         self.active_orders = still_active
 
-        old_score = self.score
+        if self.feedback_text:
+            self.feedback_timer += 1
+            if self.feedback_timer >= 180:
+                self.feedback_text = ""
+                self.feedback_timer = 0
 
         self.step_count += 1
 
@@ -325,16 +340,23 @@ class CoopEnv:
                     self.score += 1
                     self.reward += 1
                     self.serving_state = "bowl-done"
+                    self.feedback_text = "Correct order!"
+                    self.feedback_color = (80, 220, 120)
                 else:
                     self.reward -= 0.5
                     self.serving_state = "bowl-done"
+                    self.feedback_text = "Wrong order!"
+                    self.feedback_color = (220, 80, 80)
 
                 holding = None
 
             elif holding in ("bowl-start", "bowl-burnt"):
-                self.reward -= 0.5
+                self.reward -= 0.25
+                self.score += 0.5
                 self.serving_state = holding
                 holding = None
+                self.feedback_text = "Undercooked / burnt soup!"
+                self.feedback_color = (220, 80, 80)
 
         elif tile == "G" and holding is not None:
             holding = None
@@ -368,47 +390,107 @@ class CoopEnv:
             return None, (tx, ty)
 
     def render(self, screen):
+        header_rect = (0, 0, self.grid_width * self.tile_size, self.header_size)
+        draw.rect(screen, self.header_bg_color, header_rect)
+
+        font1 = font.SysFont("arial", 24, bold=True)
+        score_text = font1.render(f"Score: {self.score}", True, self.header_text_color)
+        screen.blit(score_text, (10, 10))
+
+        if self.feedback_text:
+            font_feedback = font.SysFont("arial", 20)
+            feedback_surf = font_feedback.render(self.feedback_text, True, self.feedback_color)
+            screen.blit(feedback_surf, (10, 50))
+
+        orders_to_show = [o for o in self.active_orders if not o.get("served", False)]
+        orders_to_show = sorted(orders_to_show, key=lambda o: o["deadline"])
+
+        if orders_to_show:
+            font_orders = font.SysFont("arial", 18)
+            start_x = 180          # where the first pill starts
+            y = 10                 # vertical position in the header
+            card_w = 170
+            card_h = 30
+            gap = 8
+
+            for i, order in enumerate(orders_to_show[:4]):
+                remaining = max(0, order["deadline"] - self.step_count)
+                x = start_x + i * (card_w + gap)
+
+                fill_color = (45, 45, 75)
+                border_color = (110, 110, 170)
+
+                if remaining < 300:
+                    border_color = (200, 90, 90)   # red
+
+                rect = Rect(x, y, card_w, card_h)
+                draw.rect(screen, fill_color, rect, border_radius=8)
+                draw.rect(screen, border_color, rect, width=2, border_radius=8)
+
+                meal_name = order["meal"].replace("-", " ")
+                seconds_left = remaining / 60.0
+                text = f"{meal_name} ({seconds_left:.1f}s)"
+                text_surf = font_orders.render(text, True, self.header_text_color)
+                text_rect = text_surf.get_rect(center=rect.center)
+                screen.blit(text_surf, text_rect)
+
         for y, row in enumerate(self.level):
             for x, char in enumerate(row):
                 if char == "A" or char == "B":
                     char = " "
+
                 if char == "P":
                     pot_sprite = self.pot_sprites[self.pot_state]
-                    screen.blit(pot_sprite, (x * self.tile_size, y * self.tile_size))
+                    screen.blit(pot_sprite, (x * self.tile_size, y * self.tile_size + self.header_size))
+
+                    if self.pot_state != "idle":
+                        font1 = font.SysFont("arial", 16, bold=True)
+
+                        if self.pot_state == "start":
+                            pot_time = font1.render(f"{COOK_TIME - self.pot_timer}", True, (255, 255, 255))
+
+                        elif self.pot_state == "done":
+                            pot_time = font1.render(f"{BURN_TIME - self.pot_timer}", True, (0, 255, 0))
+
+                        else:
+                            pot_time = font1.render("0", True, (255, 0, 0))
+
+                        pot_rect = pot_time.get_rect(center=(x * self.tile_size + self.tile_size // 2,
+                                                    y * self.tile_size + self.header_size + self.tile_size // 2))
+                        screen.blit(pot_time, pot_rect)
+
                 else:
                     sprite = self.tile_sprites[char]
-                    screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
+                    screen.blit(sprite, (x * self.tile_size, y * self.tile_size + self.header_size))
         
         for (x, y), item_name in self.wall_items.items():
             sprite = self.item_sprites[item_name]
-            screen.blit(sprite, (x * self.tile_size, y * self.tile_size))
+            screen.blit(sprite, (x * self.tile_size, y * self.tile_size + self.header_size))
         
         if self.serving_state != "idle":
             sprite = self.item_sprites[self.serving_state]
             serving_x, serving_y = find_char(self.level, "S")
-            screen.blit(sprite, (serving_x * self.tile_size, serving_y * self.tile_size))
-        
-        font1 = font.SysFont(None, 24)
-        score_surf = font1.render(f"Score: {self.score}", True, (255, 255, 255))
-        screen.blit(score_surf, (10, 10))
+            screen.blit(sprite, (serving_x * self.tile_size, serving_y * self.tile_size + self.header_size))
 
         # Agent 1
         dir_name = self._dir_to_name(self.agent1_dir)
         carry_name = self._carry_to_name(self.agent1_holding)
         if dir_name == "up" and carry_name != "empty":
             carry_name = "carry"
+
         sprite = self.agent1_sprites[(dir_name, carry_name)]
         screen.blit(sprite, (self.agent1_pos[0] * self.tile_size,
-                            self.agent1_pos[1] * self.tile_size))
+                            self.agent1_pos[1] * self.tile_size + self.header_size))
 
         # Agent 2
         dir_name = self._dir_to_name(self.agent2_dir)
         carry_name = self._carry_to_name(self.agent2_holding)
         if dir_name == "up" and carry_name != "empty":
             carry_name = "carry"
+            
         sprite = self.agent2_sprites[(dir_name, carry_name)]
         screen.blit(sprite, (self.agent2_pos[0] * self.tile_size,
-                            self.agent2_pos[1] * self.tile_size))
+                            self.agent2_pos[1] * self.tile_size + self.header_size))
     
     def _dir_to_name(self, direction):
         if direction == (0, -1):
