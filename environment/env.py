@@ -35,7 +35,7 @@ def action_to_delta(action):
         return (0, 0)
 
 class CoopEnv:
-    def __init__(self, level, orders, tile_size=60, max_steps=1000, order_time=3600, header_size=0):
+    def __init__(self, level, orders, tile_size=60, max_steps=1000, order_time=4200, header_size=0):
         self.level = level
         self.orders = orders
         self.order_time = order_time
