@@ -6,7 +6,7 @@ from environment.gym_wrapper import GymCoopEnv
 def test_gym_compliance():
     env = GymCoopEnv()
     
-    check_env(env.unwrapped)
+    check_env(env)
 
 def test_obs_shape():
     env = GymCoopEnv()
