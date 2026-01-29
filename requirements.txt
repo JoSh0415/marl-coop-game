@@ -1,2 +1,4 @@
 pygame
+pytest
 gymnasium
+numpy
