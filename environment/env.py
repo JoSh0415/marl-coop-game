@@ -35,12 +35,14 @@ def action_to_delta(action):
         return (0, 0)
 
 class CoopEnv:
-    def __init__(self, level, orders, tile_size=60, max_steps=1000, order_time=4200, header_size=0):
+    def __init__(self, level, orders, tile_size=60, max_steps=1000, order_time=4200, header_size=0, reward_mode="sparse"):
         self.level = level
         self.orders = orders
         self.order_time = order_time
         self.grid_width = len(self.level[0])
         self.grid_height = len(self.level)
+
+        self.reward_mode = reward_mode
 
         self.tile_size = tile_size
         self.max_steps = max_steps
@@ -301,15 +303,25 @@ class CoopEnv:
 
         if tile == "I":
             holding = "onion"
+            if self.reward_mode == "shaped":
+                if self._ingredient_useful("onion"):
+                    reward += 0.05
 
         elif tile == "J":
             holding = "tomato"
+            if self.reward_mode == "shaped":
+                if self._ingredient_useful("tomato"):
+                    reward += 0.05
 
         elif tile == "R" and holding is None:
             holding = "bowl"
 
         elif tile == "P" and holding is not None:
             if holding in ("onion", "tomato"):
+                if self.reward_mode == "shaped":
+                    if self._ingredient_useful(holding):
+                        reward += 0.1
+
                 if self.pot_state == "done":
                     self.pot_state = "start"
                     self.pot_timer = 1000
@@ -332,6 +344,11 @@ class CoopEnv:
             elif holding == "bowl" and self.pot_state != "idle":
                 soup_name = self.pot_recipe or "invalid"
                 bowl_state = f"bowl-{self.pot_state}-{soup_name}"
+                if self.reward_mode == "shaped":
+                    if self.pot_state == "done":
+                        reward += 0.15
+                    elif self.pot_state in ("start", "burnt"):
+                        reward -= 0.05
                 holding = bowl_state
                 self.pot_onions = 0
                 self.pot_tomatoes = 0
@@ -624,3 +641,12 @@ class CoopEnv:
             return 1, 1
         else:
             return None, None
+    
+    def _ingredient_useful(self, ingredient):
+        needed_onions = any((not o["served"]) and o["onions"] > 0 for o in self.active_orders)
+        needed_tomatoes = any((not o["served"]) and o["tomatoes"] > 0 for o in self.active_orders)
+        if ingredient == "onion":
+            return needed_onions
+        if ingredient == "tomato":
+            return needed_tomatoes
+        return False

@@ -34,7 +34,7 @@ display.set_caption("MARL Cooperative Environment")
 
 clock = time.Clock()
 
-env = CoopEnv(LEVEL1, ORDERS1, tile_size=tile_size, max_steps=6600, order_time = 4200, header_size=header_size)
+env = CoopEnv(LEVEL1, ORDERS1, tile_size=tile_size, max_steps=6600, order_time = 4200, header_size=header_size, reward_mode="shaped")
 obs = env.reset()
 
 running = True
