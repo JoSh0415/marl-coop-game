@@ -6,7 +6,7 @@ os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 import pygame
 pygame.init()
-pygame.display.set_mode((1, 1))
+pygame.display.set_mode((1, 1)) # Minimal dummy display
 
 import gymnasium as gym
 from stable_baselines3 import PPO
@@ -23,9 +23,10 @@ def train_baseline():
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    env = GymCoopEnv()
+    env = GymCoopEnv() # Create the gym environment
     env.reset()
 
+    # Create the initial PPO model with the game env
     model = PPO(
         "MlpPolicy", 
         env, 
@@ -35,12 +36,12 @@ def train_baseline():
         n_steps=2048,
     )
 
-    TIMESTEPS = 1000000
+    TIMESTEPS = 1000000 # Number of training timesteps (1 million)
         
-    model.learn(total_timesteps=TIMESTEPS, tb_log_name=EXPERIMENT_NAME)
+    model.learn(total_timesteps=TIMESTEPS, tb_log_name=EXPERIMENT_NAME) # Train the model
 
     save_path = f"{models_dir}/{TIMESTEPS}_steps"
-    model.save(save_path)
+    model.save(save_path) # Save the trained model
 
 if __name__ == "__main__":
     train_baseline()
