@@ -1,0 +1,34 @@
+{
+  "n_episodes": 1000,
+  "perfect_rate": 1.0,
+  "score_mean": 3.0,
+  "score_min": 3,
+  "score_max": 3,
+  "events": {
+    "wrong_serve_attempts": {
+      "mean": 0.0,
+      "sum": 0,
+      "max": 0.0
+    },
+    "not_done_serve_attempts": {
+      "mean": 0.0,
+      "sum": 0,
+      "max": 0.0
+    },
+    "wrong_done_soup_pickups": {
+      "mean": 0.0,
+      "sum": 0,
+      "max": 0.0
+    },
+    "burnt_soup_pickups": {
+      "mean": 0.0,
+      "sum": 0,
+      "max": 0.0
+    },
+    "wrong_pot_adds": {
+      "mean": 0.0,
+      "sum": 0,
+      "max": 0.0
+    }
+  }
+}
