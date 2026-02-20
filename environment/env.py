@@ -4,7 +4,6 @@ import os
 from collections import deque
 from gymnasium.utils import seeding
 
-
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 BASE_DIR = os.path.dirname(THIS_DIR)
@@ -43,7 +42,7 @@ def action_to_delta(action):
         return (0, 0)
 
 class CoopEnv:
-    def __init__(self, level, tile_size=60, max_steps=1000, order_time=450, header_size=0, reward_mode="sparse", render=False):
+    def __init__(self, level, tile_size=60, max_steps=1000, order_time=450, header_size=0, render=False):
         
         # Initialise the environment with the level layout and parameters
         self.level = level
@@ -51,8 +50,6 @@ class CoopEnv:
         self.grid_width = len(self.level[0])
         self.grid_height = len(self.level)
         self.env_render = render
-
-        self.reward_mode = reward_mode
 
         self.tile_size = tile_size
         self.max_steps = max_steps
@@ -190,6 +187,9 @@ class CoopEnv:
         # Pre-calculate connected components
         self._build_components()
 
+        # Pre-calculate true handoff counters
+        self._build_handoff_counters()
+
         # Positions of key stations for quick access
         self.pot_pos = find_char(self.level, "P")
         self.rack_pos = find_char(self.level, "R")
@@ -203,10 +203,6 @@ class CoopEnv:
         self.serve_side_comps = self._station_adjacent_comps(self.serve_pos) if self.serve_pos else set()
 
         # Reset the internal state variables for the episode
-        self.stuck_steps = 0
-        self.prev_a1 = tuple(self.agent1_pos)
-        self.prev_a2 = tuple(self.agent2_pos)
-
         self.pot_onions = 0
         self.pot_tomatoes = 0
         self.pot_target_onions = None
@@ -214,7 +210,10 @@ class CoopEnv:
         self.pot_recipe = None
         self.pot_timer = 0
         self.pot_state = "idle"
-        self.dishes_ready = 0
+
+        # Intermediate rewards only for first 3 soup cycles
+        self.soups_collected = 0
+        self.handoffs_rewarded = 0
 
         self.feedback_text = ""
         self.feedback_color = self.header_text_color
@@ -232,6 +231,7 @@ class CoopEnv:
 
         # Clear any items on the counters from the previous episode
         self.wall_items.clear()
+        self.invalid_pot_add_streak = {1: 0, 2: 0}
 
         return self.get_observation()
 
@@ -256,7 +256,7 @@ class CoopEnv:
 
     def step(self, action1, action2):
         # Step penalty to encourage efficiency
-        reward = -0.005
+        reward = -0.01
 
         # Check for new orders and update active/pending lists
         new_active = []
@@ -285,7 +285,7 @@ class CoopEnv:
                 continue
             if self.step_count > order["deadline"]:
                 self.failed_orders.append(order)
-                reward -= 10.0
+                reward -= 2.0
             else:
                 still_active.append(order)
 
@@ -305,8 +305,10 @@ class CoopEnv:
 
         if action1 in (1, 2, 3, 4):
             self.agent1_dir = (dx1, dy1)
+            self.invalid_pot_add_streak[1] = 0
         if action2 in (1, 2, 3, 4):
             self.agent2_dir = (dx2, dy2)
+            self.invalid_pot_add_streak[2] = 0
 
         # Calculate candidate new positions and check for swap attempts
         candidate1 = (self.agent1_pos[0] + dx1, self.agent1_pos[1] + dy1)
@@ -318,10 +320,6 @@ class CoopEnv:
         swap_attempt = (candidate1 == a2_pos and candidate2 == a1_pos)
         a1_hits_a2  = (candidate1 == a2_pos)
         a2_hits_a1  = (candidate2 == a1_pos)
-
-        # Apply a penalty for attempted collisions to encourage better coordination 
-        if a1_hits_a2 or a2_hits_a1:
-            reward -= 0.005
 
         # Handle movement including collision and swap logic
         if swap_attempt:
@@ -346,79 +344,20 @@ class CoopEnv:
         if action2 == 5:
             reward += self.handle_interact(agent=2)
         
-        # Handle cooking logic and apply rewards/penalties for pot state and timing
+        # Handle cooking timer, reward when cooking finishes, penalise burning
         if self.pot_state in ("start", "done"):
             self.pot_timer += 1
 
             if self.pot_state == "start" and self.pot_timer >= COOK_TIME:
                 self.pot_state = "done"
-                if self.reward_mode == "shaped":
-                    reward += 1.5
+                if self.soups_collected < 3:
+                    reward += 0.5
 
             elif self.pot_state == "done" and self.pot_timer >= BURN_TIME:
                 self.pot_state = "burnt"
-                if self.reward_mode == "shaped":
-                    reward -= 10.0
-        
-        # To encourage timely pickups, small reward for holding bowl adjacent to cooking pot
-        for aid in [1, 2]:
-            pos = self.agent1_pos if aid == 1 else self.agent2_pos
-            holding = self.agent1_holding if aid == 1 else self.agent2_holding
-            
-            if holding == "bowl" and self.pot_state == "start":
-                if self._is_adjacent(pos, "P"):
-                    reward += 0.06
-        
-        if self.reward_mode == "shaped":
-            # Small penalty if not holding bowl when pot is about to be done, to encourage readiness
-            if self.pot_state == "start" and self.pot_timer > COOK_TIME - 150:
-                a1_ready = (self.agent1_holding == "bowl")
-                a2_ready = (self.agent2_holding == "bowl")
-                if not (a1_ready or a2_ready):
-                    reward -= 0.06
+                reward -= 3.0
 
-            elif self.pot_state == "done":
-                a1_ready = (self.agent1_holding == "bowl")
-                a2_ready = (self.agent2_holding == "bowl")
-
-                # Penalty if no one is holding a bowl when the soup is done, to encourage timely pickups
-                if not (a1_ready or a2_ready) and not self._has_bowl_accessible_to_pot():
-                    reward -= 0.06
-                if self.pot_timer > COOK_TIME + 10:
-                    reward -= 0.06
-                if self.pot_timer > COOK_TIME + 60:
-                    reward -= 0.12
-                
-                for aid in (1,2):
-                    if aid == 1:
-                        holding = self.agent1_holding
-                        pos = self.agent1_pos
-                        direction = self.agent1_dir
-                    else:
-                        holding = self.agent2_holding
-                        pos = self.agent2_pos
-                        direction = self.agent2_dir
-
-                    tile, _ = self.tile_in_front(pos, direction)
-
-                    # Small reward for holding ingredient in front of the pot, 
-                    # to encourage correct pot preparation
-                    if holding in ("onion","tomato") and tile == "P": reward += 0.006
-
-                    # Small reward for standing in front of station with empty hands, 
-                    # to encourage interaction
-                    if holding is None and tile in ("I","J","R"): reward += 0.003
-
-                    # Small reward for holding done soup in front of serving station, 
-                    # to encourage serving
-                    if isinstance(holding,str) and holding.startswith("bowl-done") and tile == "S": reward += 0.012
-
-                    # Small penalty for holding done soup but not in front of serving station, 
-                    # to encourage serving
-                    if holding and holding.startswith("bowl-done-"):
-                        if self._can_reach_station(aid, self.serve_pos) and not self._is_adjacent(pos, "S"):
-                            reward -= 0.01
-        
+        # Serving station animation timer
         if self.serving_state.startswith("bowl-"):
             self.serving_time += 1
 
@@ -426,38 +365,16 @@ class CoopEnv:
                 self.serving_state = "idle"
                 self.serving_time = 0
         
-        a1_now = tuple(self.agent1_pos)
-        a2_now = tuple(self.agent2_pos)
-
-        active_unserved = any(not o["served"] for o in self.active_orders)
-        pot_busy = (self.pot_state in ("start", "done"))
-        tasks_exist = active_unserved or pot_busy
-
-        waiting_ok = (self.pot_state == "start" and self.pot_timer < COOK_TIME - 30)
-
-        # Penalty for not moving when there are active tasks, 
-        # to encourage exploration and prevent stalling
-        if tasks_exist and (not waiting_ok) and a1_now == self.prev_a1 and a2_now == self.prev_a2:
-            self.stuck_steps += 1
-        else:
-            self.stuck_steps = 0
-
-        if self.stuck_steps >= 80:
-            reward -= 0.05
-
-        self.prev_a1, self.prev_a2 = a1_now, a2_now
-
         # Check if the episode is done: 
         # either max steps reached or all orders completed/failed
         done = (self.step_count >= self.max_steps) or (
                     len(self.pending_orders) == 0 and all(o["served"] for o in self.active_orders)
                 )
         
-        # End of episode reward/penalty based on performance, 
-        # to encourage perfect completion
-        if done and self.reward_mode == "shaped":
-            perfect = (self.score == 3 and len(self.failed_orders) == 0)
-            reward += 30.0 if perfect else -10.0
+        # Bonus for completing all orders perfectly
+        if done:
+            if self.score == 3 and len(self.failed_orders) == 0:
+                reward += 10.0
 
         obs = self.get_observation()
         info = {}
@@ -470,7 +387,7 @@ class CoopEnv:
 
     def handle_interact(self, agent):
         reward = 0
-        
+
         # Determine the agent's position, direction, 
         # and held item based on the agent ID
         if agent == 1:
@@ -482,169 +399,109 @@ class CoopEnv:
             direction = self.agent2_dir
             holding = self.agent2_holding
 
-        # Check the tile in front of the agent
         tile, (tx, ty) = self.tile_in_front(pos, direction)
 
         if tile is None:
             return 0
 
-        # Handle interactions with onion box
+        # Onion dispenser
         if tile == "I":
-            if self.reward_mode == "shaped":
-
-                # Reward/penalty depending on whether the ingredient 
-                # is useful or whether the agent is holding anything, 
-                # to encourage efficient ingredient pickup
-                if holding is None:
-                    if self._ingredient_useful("onion", agent):
-                        reward += 3.0
-                    else:
-                        reward -= 1.0
-                else:
-                    reward -= 0.05
             if holding is None:
                 holding = "onion"
+                self.invalid_pot_add_streak[agent] = 0
 
-        # Handle interactions with tomato box
+        # Tomato dispenser
         elif tile == "J":
-            if self.reward_mode == "shaped":
-
-                # Reward/penalty depending on whether the ingredient 
-                # is useful or whether the agent is holding anything, 
-                # to encourage efficient ingredient pickup
-                if holding is None:
-                    if self._ingredient_useful("tomato", agent):
-                        reward += 3.0
-                    else:
-                        reward -= 1.0
-                else:
-                    reward -= 0.05
             if holding is None:
                 holding = "tomato"
+                self.invalid_pot_add_streak[agent] = 0
 
-        # Handle interactions with bowl rack
+        # Bowl rack
         elif tile == "R":
             if holding is None:
-                if self.reward_mode == "shaped":
-
-                    # Reward for picking up a bowl when the soup is done 
-                    # or about to be done, to encourage timely pickups
-                    if self.pot_state == "done" and self._need_bowl():
-                        print("picked up bowl when done")
-                        reward += 10.0
-                    elif self.pot_state == "start" and self._need_bowl():
-                        if self.pot_timer > COOK_TIME - 150:
-                            reward += 10.0
-                        else:
-                            reward += 5.0
-                        print("picked up bowl when undercooked")
-
                 holding = "bowl"
-            else:
-                # Small penalty for interactions when holding something
-                if holding == "bowl":
-                    if self.reward_mode == "shaped":
-                        reward -= 0.5
+                if self.pot_state == "done":
+                    print("picked up bowl when done")
+                elif self.pot_state == "start":
+                    print("picked up bowl when undercooked")
 
-        # Handle interactions with cooking pot
+        # Pot interaction
         elif tile == "P" and holding is not None:
+            # Add ingredient to pot
             if holding in ("onion", "tomato"):
-
-                # Penalty for trying to add ingredients when the pot is already cooking
                 if self.pot_state != "idle":
-                    if self.reward_mode == "shaped":
-                        reward -= 1.0
-                    return reward
-                
-                # Reward/penalty depending on whether the ingredient is useful, 
-                # to encourage correct pot preparation
-                if self.reward_mode == "shaped":
-                    if self._ingredient_useful_for_pot(holding):
-                        reward += 8.0
-                    else:
-                        reward -= 6.0
-                        return reward
+                    return self._penalise_invalid_pot_add()
 
-                # Update pot ingredient counts
-                if holding == "onion":
-                    self.pot_onions = min(1, self.pot_onions + 1)
-                else:
-                    self.pot_tomatoes = min(1, self.pot_tomatoes + 1)
+                # Reject if pot already has this ingredient type
+                if holding == "onion" and self.pot_onions >= 1:
+                    return self._penalise_invalid_pot_add()
+                if holding == "tomato" and self.pot_tomatoes >= 1:
+                    return self._penalise_invalid_pot_add()
 
+                # Check if the new contents lead toward a valid order
+                new_onions = self.pot_onions + (1 if holding == "onion" else 0)
+                new_tomatoes = self.pot_tomatoes + (1 if holding == "tomato" else 0)
+
+                target = self._get_target_order_for_pot_contents(
+                    new_onions, new_tomatoes
+                )
+
+                if target is None:
+                    return self._penalise_invalid_pot_add()
+
+                # Accept the ingredient
+                self.invalid_pot_add_streak[agent] = 0
+                self.pot_onions = new_onions
+                self.pot_tomatoes = new_tomatoes
+                if self.soups_collected < 3:
+                    reward += 1.0
                 holding = None
 
-                if self.pot_state == "idle" and (self.pot_onions + self.pot_tomatoes) > 0:
-                    target = self._get_target_order_for_pot_contents(self.pot_onions, self.pot_tomatoes)
+                self.pot_target_onions = target["onions"]
+                self.pot_target_tomatoes = target["tomatoes"]
 
-                    # If the current pot contents match an active order, 
-                    # set that as the target recipe.
-                    if target:
-                        self.pot_target_onions = target["onions"]
-                        self.pot_target_tomatoes = target["tomatoes"]
-                        if self.pot_onions == self.pot_target_onions and self.pot_tomatoes == self.pot_target_tomatoes:
-                            self.pot_state = "start"
-                            self.pot_timer = 0
-                    else:
-                        self.pot_onions = 0
-                        self.pot_tomatoes = 0
-                        self.pot_recipe = None
-                        self.pot_target_onions = None
-                        self.pot_target_tomatoes = None
-                    
-                    # If the pot is idle and now has correct ingredients,
-                    # start cooking immediately
-                    if (self.pot_target_onions is not None and
-                        self.pot_onions == self.pot_target_onions and
-                        self.pot_tomatoes == self.pot_target_tomatoes):
-                        self.pot_state = "start"
-                        self.pot_timer = 0
-                
-                self.pot_recipe = self._counts_to_recipe(self.pot_onions, self.pot_tomatoes)
+                if (self.pot_onions == self.pot_target_onions and
+                    self.pot_tomatoes == self.pot_target_tomatoes):
+                    self.pot_state = "start"
+                    self.pot_timer = 0
 
+                self.pot_recipe = self._counts_to_recipe(
+                    self.pot_onions, self.pot_tomatoes
+                )
+
+            # Pick up soup with bowl
             elif holding == "bowl" and self.pot_state != "idle":
                 if self.pot_state == "start":
-                    return 0.0
-    
+                    return reward
+
                 soup_name = self.pot_recipe or "invalid"
                 bowl_state = f"bowl-{self.pot_state}-{soup_name}"
 
-                if self.reward_mode == "shaped":
-
-                    # Reward/penalty depending on whether the soup is correct, 
-                    # to encourage timely pickups and correct serving
-                    if self.pot_state == "done":
-                        soup_onions, soup_tomatoes = self._recipe_to_counts(soup_name)
-                        is_wanted = False
-                        for order in self.active_orders:
-                            if not order["served"]:
-                                if (order["onions"] == soup_onions and 
-                                    order["tomatoes"] == soup_tomatoes):
-                                    is_wanted = True
-                                    break
-                        
-                        if is_wanted:
-                            reward += 20.0
-                            print(f"pick up correct done soup {soup_name}")
-                        else:
-                            reward -= 4.0
-                            print(f"pick up incorrect done soup {soup_name}")
-
-                    # Penalty for picking up burnt soup, 
-                    # to encourage timely pickups and prevent holding burnt soup
-                    elif self.pot_state == "burnt":
-                        reward -= 4.0
-                        print("pick up burnt soup")
+                # Reward picking up a correct done soup, 
+                # penalise picking up burnt or incorrect soup
+                if self.pot_state == "done":
+                    self.soups_collected += 1
+                    soup_onions, soup_tomatoes = self._recipe_to_counts(soup_name)
+                    matches = any(
+                        not o.get("served") and o["onions"] == soup_onions and o["tomatoes"] == soup_tomatoes
+                        for o in self.active_orders
+                    )
+                    if matches and self.soups_collected <= 3:
+                        reward += 2.0
+                        print(f"pick up correct done soup {soup_name}")
+                    elif matches:
+                        print(f"pick up correct done soup {soup_name} (over budget)")
+                    else:
+                        print(f"pick up incorrect done soup {soup_name}")
+                elif self.pot_state == "burnt":
+                    self.soups_collected += 1
+                    reward -= 3.0
+                    print("pick up burnt soup")
 
                 holding = bowl_state
-                self.pot_onions = 0
-                self.pot_tomatoes = 0
-                self.pot_recipe = None
-                self.pot_state = "idle"
-                self.pot_timer = 0
-                self.pot_target_onions = None
-                self.pot_target_tomatoes = None
+                self._reset_pot()
 
-        # Handle interactions with serving station
+        # Serving station
         elif tile == "S":
             if isinstance(holding, str) and holding.startswith("bowl-"):
                 parts = holding.split("-", 2)
@@ -656,6 +513,8 @@ class CoopEnv:
 
                 soup_onions, soup_tomatoes = self._recipe_to_counts(soup_recipe)
 
+                # Check if the served soup matches any active order
+                # and reward accordingly
                 if soup_state == "done" and soup_onions is not None:
                     served_correct = False
                     target_deadline = 0
@@ -669,136 +528,68 @@ class CoopEnv:
                                 self.completed_orders.append(order)
                                 served_correct = True
                                 break
-                    
-                    # Reward/penalty depending on whether the served soup matches an active order,
-                    # and how quickly it was served, to encourage correct and timely serving
+
                     if served_correct:
-                        print("served correct done order")
                         self.score += 1
                         time_left = target_deadline - self.step_count
                         time_bonus = max(0, time_left * 0.01)
-                        reward += 50 + time_bonus
+                        reward += 20.0 + time_bonus
                         self.serving_state = "bowl-done"
                         nice_name = soup_recipe.replace("-", " ")
                         self.feedback_text = f"Correct: {nice_name}!"
                         self.feedback_color = (80, 220, 120)
+                        print("served correct done order")
                     else:
-                        print("served incorrect done order")
-                        reward -= 80.0
+                        reward -= 2.0
                         self.serving_state = "bowl-done"
                         self.feedback_text = "Wrong order!"
                         self.feedback_color = (220, 80, 80)
+                        print("served incorrect done order")
 
                     holding = None
-                
-                # Penalty for trying to serve burnt soup,
-                # to encourage timely serving and prevent holding burnt soup
-                else:
-                    print("served burnt order")
-                    reward -= 20.0
 
+                # Burnt or undercooked soup served
+                else:
+                    reward -= 2.0
                     if soup_state in ("start", "burnt"):
                         self.serving_state = f"bowl-{soup_state}"
                     else:
                         self.serving_state = "bowl-burnt"
-
-                    self.feedback_text = "Undercooked / burnt / invalid soup!"
+                    self.feedback_text = "Bad soup!"
                     self.feedback_color = (220, 80, 80)
+                    print("served burnt order")
                     holding = None
         
-        # Handle interactions with garbage
+        # Garbage — discard held item
         elif tile == "G" and holding is not None:
-            if self.reward_mode == "shaped":
-
-                # Weighted reward/penalty depending on whether the agent is discarding something useful,
-                # to encourage efficient inventory management
-                if holding in ("onion", "tomato"):
-                    if self._ingredient_useful(holding, agent):
-                        reward -= 15.0
-                    else:
-                        reward += 0.05
-                if holding == "bowl":
-                    if self.pot_state == "done":
-                        reward -= 15.0
-                    elif self.pot_state == "start":
-                        reward -= 15.0
-                if isinstance(holding, str) and holding.startswith("bowl-"):
-                    parts = holding.split("-", 2)
-                    if len(parts) == 3:
-                        _, soup_state, soup_recipe = parts
-                    else:
-                        soup_state = "unknown"
-                        soup_recipe = "invalid"
-                    
-                    soup_onions, soup_tomatoes = self._recipe_to_counts(soup_recipe)
-
-                    if soup_state == "done" and soup_onions is not None:
-                        correct_soup = False
-
-                        for order in self.active_orders:
-                            if not order["served"]:
-                                if (order["onions"] == soup_onions and
-                                    order["tomatoes"] == soup_tomatoes):
-                                    correct_soup = True
-                                    break
-
-                        if correct_soup:
-                            reward -= 50.0
-                        else:
-                            reward += 0.05
-                    elif soup_state == "burnt":
-                        reward += 0.5
-                    
             holding = None
 
-        # Handle interactions with counters
+        # Counter — pick up or place items
         elif tile == "#":
             key = (tx, ty)
             item_here = self.wall_items.get(key)
 
-            # If not holding anything and there's an item on the counter, pick it up
             if holding is None and item_here is not None:
                 holding = item_here
                 del self.wall_items[key]
 
             elif holding is not None and item_here is None:
-                if self.reward_mode == "shaped":
-                    agent_can_serve = self._can_reach_station(agent, self.serve_pos)
-                    other = 2 if agent == 1 else 1
-                    other_can_serve = self._can_reach_station(other, self.serve_pos)
 
-                    # Small reward/penalty for placing items on counters depending 
-                    # on whether they are useful and whether the agent can reach the required station,
-                    # to encourage efficient inventory management and collaboration encouragement
-                    if isinstance(holding, str) and holding.startswith("bowl-done-"):
-                        if agent_can_serve:
-                            return reward - 10.0
-                        elif other_can_serve:
-                            reward += 0.3
-                        else:
-                            reward -= 1.0
-
-                    if holding in ("onion", "tomato"):
-                        if self._can_reach_station(agent, self.pot_pos) and self.pot_state == "idle":
-                            return reward - 2.0
-                        if (not self._can_reach_station(agent, self.pot_pos)) and self._can_reach_station(other, self.pot_pos):
-                            reward += 0.2
-                        else:
-                            reward -= 0.2
-
-                    if holding == "bowl":
-                        if self._can_reach_station(agent, self.pot_pos) and self.pot_state in ("start", "done"):
-                            return reward - 1.5
-
-                # Place the item on the counter if it's empty
+                # Reward placing a done soup on a handoff counter
+                if (isinstance(holding, str) and holding.startswith("bowl-done-")
+                        and self._is_handoff_counter(key)
+                        and self.handoffs_rewarded < 3):
+                    reward += 2.0
+                    self.handoffs_rewarded += 1
+                    print("placed done soup on handoff counter")
                 self.wall_items[key] = holding
                 holding = None
-        
+
         if agent == 1:
             self.agent1_holding = holding
         else:
             self.agent2_holding = holding
-        
+
         return reward
 
     # Function: Return the tile in front of the agent based on its position and direction
@@ -1009,158 +800,16 @@ class CoopEnv:
             return 1, 1
         else:
             return None, None
-    
-    # Function: Determine if picking up a given ingredient 
-    # would be useful for completing any active orders,
-    # taking into account current inventory, pot contents, 
-    # and accessible items on counters
-    def _ingredient_useful(self, ingredient, agent_id):
-        active_orders = sorted([o for o in self.active_orders if not o["served"]], key=lambda o: o["deadline"])
 
-        target = None
-        for order in active_orders:
-            recipe = order["meal"]
-            if self._count_existing_soups(recipe) > 0:
-                continue
-            target = order
-            break
-
-        if not target:
-            return False
-
-        comp = self._agent_comp(agent_id)
-
-        supply_onions = 0
-        supply_tomatoes = 0
-
-        supply_onions += self.pot_onions
-        supply_tomatoes += self.pot_tomatoes
-
-        for (wx, wy), item in self.wall_items.items():
-            if not self._wall_accessible_from_comp((wx, wy), comp):
-                continue
-            if item == "onion":
-                supply_onions += 1
-            elif item == "tomato":
-                supply_tomatoes += 1
-
-        if agent_id == 1:
-            if self.agent1_holding == "onion": supply_onions += 1
-            if self.agent1_holding == "tomato": supply_tomatoes += 1
-        else:
-            if self.agent2_holding == "onion": supply_onions += 1
-            if self.agent2_holding == "tomato": supply_tomatoes += 1
-
-        other_id = 2 if agent_id == 1 else 1
-        other_comp = self._agent_comp(other_id)
-        if other_comp == comp:
-            other_hold = self.agent2_holding if agent_id == 1 else self.agent1_holding
-            if other_hold == "onion": supply_onions += 1
-            if other_hold == "tomato": supply_tomatoes += 1
-
-        needed_onions = target["onions"]
-        needed_tomatoes = target["tomatoes"]
-
-        if ingredient == "onion":
-            return supply_onions < needed_onions
-        if ingredient == "tomato":
-            return supply_tomatoes < needed_tomatoes
-
-        return False
-
-    # Function: Determine if adding a given ingredient 
-    # to the pot would be useful for completing any active orders,
-    # taking into account pot contents and target pot recipe
-    def _ingredient_useful_for_pot(self, ingredient):
-        if self.pot_target_onions is not None:
-            target_onions = self.pot_target_onions
-            target_tomatoes = self.pot_target_tomatoes
-        else:
-            target = self._get_target_order_for_new_pot()
-            if not target:
-                return False
-            target_onions = target["onions"]
-            target_tomatoes = target["tomatoes"]
-
-        if self.pot_onions > target_onions or self.pot_tomatoes > target_tomatoes:
-            return False
-
-        if ingredient == "onion":
-            return self.pot_onions < target_onions
-        if ingredient == "tomato":
-            return self.pot_tomatoes < target_tomatoes
-        return False
-
-    # Function: Determine if there is a bowl accessible to the pot, 
-    # either by being held by an agent or on a wall
-    def _has_bowl_accessible_to_pot(self):
-        if not self.pot_side_comps:
-            return False
-
-        a1c = self._agent_comp(1)
-        a2c = self._agent_comp(2)
-
-        if self.agent1_holding == "bowl" and a1c in self.pot_side_comps:
-            return True
-        if self.agent2_holding == "bowl" and a2c in self.pot_side_comps:
-            return True
-
-        for (wx, wy), item in self.wall_items.items():
-            if item != "bowl":
-                continue
-            for comp in self.pot_side_comps:
-                if self._wall_accessible_from_comp((wx, wy), comp):
-                    return True
-
-        return False
-    
-    # Function: Determine if a bowl is needed for the pot
-    def _need_bowl(self):
-        if self.pot_state not in ("start", "done"):
-            return False
-
-        if self.pot_state == "start" and self.pot_timer < COOK_TIME - 150:
-            return False
-
-        return not self._has_bowl_accessible_to_pot()
-    
-    # Function: Count how many bowls of a recipe are currently present in the environment,
-    # either held by agents, on walls, or in the pot if it's done
-    def _count_existing_soups(self, recipe_name):
-        count = 0
-        
-        for h in [self.agent1_holding, self.agent2_holding]:
-            if isinstance(h, str) and h == f"bowl-done-{recipe_name}":
-                count += 1
-        
-        for item in self.wall_items.values():
-            if isinstance(item, str) and item == f"bowl-done-{recipe_name}":
-                count += 1
-                
-        if self.pot_recipe == recipe_name and self.pot_state in ["start", "done"]:
-            count += 1
-            
-        return count
-    
-    # Function: Get the next target order for a new pot 
-    # based on active orders and pending orders
-    def _get_target_order_for_new_pot(self):
-        active_orders = sorted([o for o in self.active_orders if not o["served"]],
-                            key=lambda o: o["deadline"])
-
-        for order in active_orders:
-            recipe = order["meal"]
-            if self._count_existing_soups(recipe) > 0:
-                continue
-            return order
-
-        for order in self.pending_orders:
-            recipe = order["meal"]
-            if self._count_existing_soups(recipe) > 0:
-                continue
-            return order
-
-        return None
+    # Function: Reset the pot state and contents to be empty and idle
+    def _reset_pot(self):
+        self.pot_onions = 0
+        self.pot_tomatoes = 0
+        self.pot_recipe = None
+        self.pot_state = "idle"
+        self.pot_timer = 0
+        self.pot_target_onions = None
+        self.pot_target_tomatoes = None
     
     # Function: Generate random orders with random meals and start times,
     # ensuring some spacing between their start times
@@ -1283,39 +932,51 @@ class CoopEnv:
             [o for o in self.active_orders if not o.get("served", False)],
             key=lambda o: o["deadline"]
         )
-
         candidates = active if active else list(self.pending_orders)
 
-        def is_available_elsewhere(order):
-            return self._count_existing_soups(order["meal"]) > 0
-
+        # Exact match first
         for order in candidates:
-            if is_available_elsewhere(order):
-                continue
             if order["onions"] == cur_onions and order["tomatoes"] == cur_tomatoes:
                 return order
 
         best = None
         best_extra = None
-        best_time = None
 
         for order in candidates:
-            if is_available_elsewhere(order):
-                continue
-
             if order["onions"] < cur_onions or order["tomatoes"] < cur_tomatoes:
                 continue
-
             extra = (order["onions"] - cur_onions) + (order["tomatoes"] - cur_tomatoes)
-
-            time_key = order.get("deadline", order.get("start", 10**9))
-
-            if best is None or extra < best_extra or (extra == best_extra and time_key < best_time):
+            if best is None or extra < best_extra:
                 best = order
                 best_extra = extra
-                best_time = time_key
 
         return best
 
+    # Function: Precompute which wall tiles are handoff counters based on 
+    # their adjacency to walkable tiles from different components
+    def _build_handoff_counters(self):
+        self.handoff_counters = set()
 
+        for y in range(self.grid_height):
+            row = self.level[y]
+            for x in range(self.grid_width):
+                if row[x] != "#":
+                    continue
+
+                neighbor_comps = set()
+                for nx, ny in self._neighbors4(x, y):
+                    if self._is_walkable(nx, ny):
+                        neighbor_comps.add(self.comp_id[ny][nx])
+
+                if len(neighbor_comps) >= 2:
+                    self.handoff_counters.add((x, y))
+
+    # Function: Check if a wall tile is a handoff counter
+    def _is_handoff_counter(self, wall_pos):
+        return wall_pos in getattr(self, "handoff_counters", set())
+    
+    # Function: Penalise when an agent tries to
+    # add an ingredient to the pot in an invalid way
+    def _penalise_invalid_pot_add(self):
+        return -0.01
 
