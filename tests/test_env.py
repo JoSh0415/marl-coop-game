@@ -67,6 +67,10 @@ def test_put_ingredient_in_pot(game):
     game.agent1_pos = [9, 3]
     game.agent1_dir = (1, 0)
     game.agent1_holding = "onion"
+    game.pending_orders = []
+    game.active_orders = [
+        {"meal": "onion-soup", "onions": 1, "tomatoes": 0, "start": 0, "deadline": 1000, "served": False}
+    ]
     assert game.pot_onions == 0
     assert game.pot_state == "idle"
     
@@ -131,6 +135,7 @@ def test_serve_correct_order(game):
     assert len(game.completed_orders) == 1
 
 def test_serve_wrong_soup(game):
+    game.pending_orders = []
     game.active_orders = [
         {"meal": "onion-soup", "onions": 1, "tomatoes": 0, "start": 0, "deadline": 1000, "served": False}
     ]
