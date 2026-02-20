@@ -42,10 +42,10 @@ def debug_agent():
     pygame.display.set_caption("MARL Surgical Debugger")
 
     # Set seed for reproducibility
-    SEED = 12346
+    SEED = 12345
 
     # Create the environment with rendering enabled
-    env = GymCoopEnv("level_1", render=True)
+    env = GymCoopEnv("level_3", render=True)
     obs, info = env.reset(seed=SEED)
     
     # Initialize the observation stack
@@ -54,7 +54,7 @@ def debug_agent():
         stack.append(obs.copy())
 
     # Load the trained PPO model
-    model_path = "models/ppo_shared_level_1/ppo_shared_level_1_final.zip" 
+    model_path = "models/ppo_shared_level_1/ppo_shared_level_1_best.zip" 
     
     if not os.path.exists(model_path):
         print(f"Error: Model not found at {model_path}")
@@ -145,15 +145,10 @@ def debug_agent():
         draw_text(screen, f"A2 Hold: {env.env.agent2_holding}", base_x, y)
         y += gap * 1.5
 
-        # Logic checks e.g. determine if ingredients are useful
-        useful_onion = env.env._ingredient_useful("onion", agent_id=1) or env.env._ingredient_useful("onion", agent_id=2)
-        onion_color = GREEN if useful_onion else RED
-        draw_text(screen, f"Need Onion? {useful_onion}", base_x, y, color=onion_color)
+        # Order info
+        active = [o for o in env.env.active_orders if not o.get("served", False)]
+        draw_text(screen, f"Active Orders: {len(active)}", base_x, y)
         y += gap
-        
-        useful_tomato = env.env._ingredient_useful("tomato", agent_id=1) or env.env._ingredient_useful("tomato", agent_id=2)
-        tomato_color = GREEN if useful_tomato else RED
-        draw_text(screen, f"Need Tomato? {useful_tomato}", base_x, y, color=tomato_color)
 
         draw_text(screen, f"Orders Pending: {len(env.env.pending_orders)}", base_x, SCREEN_HEIGHT - 3 * gap)
 

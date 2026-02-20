@@ -3,7 +3,7 @@ import sys
 import json
 import csv
 import argparse
-from collections import deque
+from collections import deque, Counter
 import numpy as np
 import pygame
 from stable_baselines3 import PPO
@@ -16,6 +16,20 @@ pygame.display.set_mode((1, 1))
 
 from environment.gym_wrapper import GymCoopEnv
 
+# Function: Convert action index to movement delta (dx, dy)
+def action_to_delta(action):
+    if action == 0 or action == 5:
+        return (0, 0)
+    elif action == 1:
+        return (0, -1)
+    elif action == 2:
+        return (0, 1)
+    elif action == 3:
+        return (-1, 0)
+    elif action == 4:
+        return (1, 0)
+    return (0, 0)
+
 # Function: Parse soup information from the holding string
 def get_soup_info(holding_str):
     parts = holding_str.split("-", 2)
@@ -23,7 +37,7 @@ def get_soup_info(holding_str):
         return "bowl", "unknown", "invalid"
     return parts[0], parts[1], parts[2]
 
-# Function: Check if a served soup matches any active order
+# Function: Check if a soup recipe matches any active unserved order
 def is_wanted(env, recipe):
     onions, tomatoes = env._recipe_to_counts(recipe)
     if onions is None:
@@ -35,11 +49,14 @@ def is_wanted(env, recipe):
                 return True
     return False
 
-# Function: Calculate statistics for an event across all results
+# Function: Calculate statistics for a numeric key across all results
 def calculate_stats(results, key):
     values = []
     for r in results:
-        values.append(r[key])
+        values.append(float(r.get(key, 0.0)))
+    
+    if len(values) == 0:
+        return {"mean": 0.0, "sum": 0, "max": 0.0}
     
     return {
         "mean": float(np.mean(values)),
@@ -47,8 +64,14 @@ def calculate_stats(results, key):
         "max": float(np.max(values))
     }
 
+# Function: Calculate rate for a boolean key across all results
+def calculate_rate(results, key):
+    if len(results) == 0:
+        return 0.0
+    return float(np.mean([1.0 if r.get(key, False) else 0.0 for r in results]))
+
 # Function: Run a single episode and collect detailed results
-def run_episode(model, level_name, seed, deterministic, stack_size, max_steps):
+def run_episode(model, level_name, seed, deterministic, stack_size, max_steps_cap):
 
     # Create the environment and reset it
     gym_env = GymCoopEnv(level_name)
@@ -60,26 +83,39 @@ def run_episode(model, level_name, seed, deterministic, stack_size, max_steps):
         frames.append(obs.copy())
     
     # Get the raw environment for detailed state access
-    # and initialize tracking variables
     raw_env = gym_env.env
     total_reward = 0.0
     steps = 0
     
+    # Event counters
     w_serve = 0
     nd_serve = 0
     w_pickup = 0
     b_pickup = 0
     w_add = 0
+    wrong_pot_add_seeds = []
+
+    # Extra diagnostics 
+    collision_attempts = 0
+    stuck_penalty_steps = 0
+    both_idle_steps = 0
     
     # Track previous holding states for both agents
     prev_h1 = raw_env.agent1_holding
     prev_h2 = raw_env.agent2_holding
     
+    # Track previous positions for idle/stall detection
+    prev_p1 = tuple(raw_env.agent1_pos)
+    prev_p2 = tuple(raw_env.agent2_pos)
+    
     done = False
+    terminated = False
+    truncated = False
     
     # Main loop for the episode
     while not done:
-        if max_steps is not None and steps >= max_steps:
+        if max_steps_cap is not None and steps >= max_steps_cap:
+            truncated = True
             break
         
         # Prepare the stacked observation and run the model prediction
@@ -88,6 +124,23 @@ def run_episode(model, level_name, seed, deterministic, stack_size, max_steps):
         
         a1 = int(action[0])
         a2 = int(action[1])
+
+        # Collision attempt count
+        dx1, dy1 = action_to_delta(a1)
+        dx2, dy2 = action_to_delta(a2)
+        cand1 = (raw_env.agent1_pos[0] + dx1, raw_env.agent1_pos[1] + dy1)
+        cand2 = (raw_env.agent2_pos[0] + dx2, raw_env.agent2_pos[1] + dy2)
+        a1_pos = tuple(raw_env.agent1_pos)
+        a2_pos = tuple(raw_env.agent2_pos)
+
+        a1_hits_a2 = (cand1 == a2_pos)
+        a2_hits_a1 = (cand2 == a1_pos)
+        if a1_hits_a2 or a2_hits_a1:
+            collision_attempts += 1
+
+        # Count both-idle steps
+        if a1 == 0 and a2 == 0:
+            both_idle_steps += 1
         
         # Check Agent 1 serve errors
         if a1 == 5:
@@ -119,8 +172,11 @@ def run_episode(model, level_name, seed, deterministic, stack_size, max_steps):
             if h in ["onion", "tomato"]:
                 tile, _ = raw_env.tile_in_front(raw_env.agent1_pos, raw_env.agent1_dir)
                 if tile == "P" and raw_env.pot_state == "idle":
-                    if not raw_env._ingredient_useful_for_pot(h):
+                    new_on = raw_env.pot_onions + (1 if h == "onion" else 0)
+                    new_to = raw_env.pot_tomatoes + (1 if h == "tomato" else 0)
+                    if raw_env._get_target_order_for_pot_contents(new_on, new_to) is None:
                         w_add += 1
+                        wrong_pot_add_seeds.append(seed)
 
         # Check Agent 2 pot errors
         if a2 == 5:
@@ -128,21 +184,29 @@ def run_episode(model, level_name, seed, deterministic, stack_size, max_steps):
             if h in ["onion", "tomato"]:
                 tile, _ = raw_env.tile_in_front(raw_env.agent2_pos, raw_env.agent2_dir)
                 if tile == "P" and raw_env.pot_state == "idle":
-                    if not raw_env._ingredient_useful_for_pot(h):
+                    new_on = raw_env.pot_onions + (1 if h == "onion" else 0)
+                    new_to = raw_env.pot_tomatoes + (1 if h == "tomato" else 0)
+                    if raw_env._get_target_order_for_pot_contents(new_on, new_to) is None:
                         w_add += 1
+                        wrong_pot_add_seeds.append(seed)
 
         # Take the step in the environment and update the frame stack
-        obs, reward, terminated, truncated, info = gym_env.step(np.array([a1, a2], dtype=np.int64))
+        obs, reward, term, trunc, info = gym_env.step(np.array([a1, a2], dtype=np.int64))
         frames.append(obs.copy())
         
-        # Update reward and step count
         total_reward += float(reward)
         steps += 1
         
+        terminated = bool(term)
+        truncated = bool(trunc)
         if terminated or truncated:
             done = True
-            
-        # Check Agent 1 pickups
+
+        # Count stuck penalty steps
+        if hasattr(raw_env, "stuck_steps") and raw_env.stuck_steps >= 80:
+            stuck_penalty_steps += 1
+
+        # Check pickups after the step
         curr_h1 = raw_env.agent1_holding
         if prev_h1 == "bowl" and isinstance(curr_h1, str) and curr_h1.startswith("bowl-"):
             _, state, recipe = get_soup_info(curr_h1)
@@ -152,7 +216,6 @@ def run_episode(model, level_name, seed, deterministic, stack_size, max_steps):
             elif state == "burnt":
                 b_pickup += 1
         
-        # Check Agent 2 pickups
         curr_h2 = raw_env.agent2_holding
         if prev_h2 == "bowl" and isinstance(curr_h2, str) and curr_h2.startswith("bowl-"):
             _, state, recipe = get_soup_info(curr_h2)
@@ -164,28 +227,62 @@ def run_episode(model, level_name, seed, deterministic, stack_size, max_steps):
                 
         prev_h1 = curr_h1
         prev_h2 = curr_h2
+
+        prev_p1 = tuple(raw_env.agent1_pos)
+        prev_p2 = tuple(raw_env.agent2_pos)
     
-    # Group the results for this episode
+    # Episode outcome
     score = int(raw_env.score)
-    failures = len(raw_env.failed_orders)
-    perfect = False
-    if score == 3 and failures == 0:
-        perfect = True
-        
+    failures = int(len(raw_env.failed_orders))
+
+    # How many orders remain unserved at end
+    unserved_active = 0
+    for o in raw_env.active_orders:
+        if not o.get("served", False):
+            unserved_active += 1
+
+    pending_left = int(len(raw_env.pending_orders))
+    completed = int(len(raw_env.completed_orders))
+
+    # Perfect definition
+    perfect = (score == 3 and failures == 0)
+
+    # End reason
+    end_reason = "terminated"
+    if truncated:
+        end_reason = "truncated"
+    if max_steps_cap is not None and steps >= max_steps_cap:
+        end_reason = "cap_truncated"
+
     result = {
         "level": level_name,
-        "seed": seed,
-        "deterministic": deterministic,
-        "steps": steps,
+        "seed": int(seed),
+        "deterministic": bool(deterministic),
+        "steps": int(steps),
+        "terminated": bool(terminated),
+        "truncated": bool(truncated),
+        "end_reason": end_reason,
+
         "score": score,
         "failed_orders": failures,
-        "perfect": perfect,
-        "total_reward": total_reward,
-        "wrong_serve_attempts": w_serve,
-        "not_done_serve_attempts": nd_serve,
-        "wrong_done_soup_pickups": w_pickup,
-        "burnt_soup_pickups": b_pickup,
-        "wrong_pot_adds": w_add
+        "unserved_active_end": int(unserved_active),
+        "pending_left_end": int(pending_left),
+        "completed_orders": completed,
+
+        "perfect": bool(perfect),
+        "total_reward": float(total_reward),
+
+        # Existing events
+        "wrong_serve_attempts": int(w_serve),
+        "not_done_serve_attempts": int(nd_serve),
+        "wrong_done_soup_pickups": int(w_pickup),
+        "burnt_soup_pickups": int(b_pickup),
+        "wrong_pot_adds": int(w_add),
+
+        # Extra diagnostics
+        "collision_attempts": int(collision_attempts),
+        "stuck_penalty_steps": int(stuck_penalty_steps),
+        "both_idle_steps": int(both_idle_steps),
     }
     
     return result
@@ -219,39 +316,52 @@ if __name__ == "__main__":
     # Run evaluation across specified levels and episodes
     for level in args.levels:
 
-        # Run all episodes and collect results        
         all_results = []
         for i in range(args.episodes):
-            # Use a different seed for each episode to get a range of outcomes
             current_seed = args.seed + i
             res = run_episode(model, level, current_seed, args.deterministic, args.stack_n, args.max_steps_cap)
             all_results.append(res)
         
-        # Collect the score and perfect completion statistics
-        perfect_count = 0
-        score_sum = 0
-        for r in all_results:
-            if r["perfect"]:
-                perfect_count += 1
-            score_sum += r["score"]
-            
-        perfect_rate = perfect_count / len(all_results)
-        avg_score = score_sum / len(all_results)
+        # Score stats
         scores = [r["score"] for r in all_results]
-        
-        # Create a summary of the full evaluation results
+        perfect_rate = calculate_rate(all_results, "perfect")
+        trunc_rate = calculate_rate(all_results, "truncated")
+
+        # End reason breakdown
+        reason_counts = Counter([r["end_reason"] for r in all_results])
+
+        wrong_pot_add_seeds = list(set(r["seed"] for r in all_results if r["wrong_pot_adds"] > 0))
+
+        # Summary
         summary = {
+            "level": level,
             "n_episodes": len(all_results),
-            "perfect_rate": perfect_rate,
-            "score_mean": avg_score,
-            "score_min": min(scores),
-            "score_max": max(scores),
+
+            "perfect_rate": float(perfect_rate),
+            "truncated_rate": float(trunc_rate),
+
+            "score_mean": float(np.mean(scores)) if scores else 0.0,
+            "score_min": int(min(scores)) if scores else 0,
+            "score_max": int(max(scores)) if scores else 0,
+
+            "failed_orders": calculate_stats(all_results, "failed_orders"),
+            "unserved_active_end": calculate_stats(all_results, "unserved_active_end"),
+            "steps": calculate_stats(all_results, "steps"),
+            "total_reward": calculate_stats(all_results, "total_reward"),
+
+            "end_reasons": dict(reason_counts),
+
             "events": {
                 "wrong_serve_attempts": calculate_stats(all_results, "wrong_serve_attempts"),
                 "not_done_serve_attempts": calculate_stats(all_results, "not_done_serve_attempts"),
                 "wrong_done_soup_pickups": calculate_stats(all_results, "wrong_done_soup_pickups"),
                 "burnt_soup_pickups": calculate_stats(all_results, "burnt_soup_pickups"),
-                "wrong_pot_adds": calculate_stats(all_results, "wrong_pot_adds")
+                "wrong_pot_adds": calculate_stats(all_results, "wrong_pot_adds"),
+                "wrong_pot_add_seeds": wrong_pot_add_seeds,
+
+                "collision_attempts": calculate_stats(all_results, "collision_attempts"),
+                "stuck_penalty_steps": calculate_stats(all_results, "stuck_penalty_steps"),
+                "both_idle_steps": calculate_stats(all_results, "both_idle_steps"),
             }
         }
         
@@ -259,10 +369,10 @@ if __name__ == "__main__":
         print(json.dumps(summary, indent=2))
         
         base_name = os.path.basename(args.model).replace(".zip", "")
-        csv_file = os.path.join(args.out_dir, f"eval_{base_name}.csv")
-        json_file = os.path.join(args.out_dir, f"eval_{base_name}.summary.json")
+        csv_file = os.path.join(args.out_dir, f"eval_{base_name}_{level}.csv")
+        json_file = os.path.join(args.out_dir, f"eval_{base_name}_{level}.summary.json")
         
-        # Save the detailed results to CSV and the summary to JSON
+        # Save the detailed results to CSV and the summary to JSON
         with open(csv_file, "w", newline="") as f:
             if len(all_results) > 0:
                 writer = csv.DictWriter(f, fieldnames=all_results[0].keys())

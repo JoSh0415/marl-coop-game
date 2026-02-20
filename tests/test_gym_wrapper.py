@@ -12,7 +12,7 @@ def test_obs_shape():
     env = GymCoopEnv()
     obs, info = env.reset()
     
-    assert obs.shape == (83,)
+    assert obs.shape == (74,)
     assert isinstance(obs, np.ndarray)
     
     print(f"Observation: {obs}")
