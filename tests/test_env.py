@@ -46,24 +46,28 @@ def test_recipes(game):
     assert game._recipe_to_counts("invalid-recipe") == (None, None)
 
 def test_pickup_onion(game):
+    # onion dispenser I is at (0,4)
     game.agent1_pos = [1, 4]
     game.agent1_dir = (-1, 0)
     obs, reward, done, info = game.step(5, 0)
     assert game.agent1_holding == "onion"
 
 def test_pickup_tomato(game):
+    # tomato dispenser J is at (8,7)
     game.agent1_pos = [8, 6]
     game.agent1_dir = (0, 1)
     game.step(5, 0)
     assert game.agent1_holding == "tomato"
 
 def test_pickup_bowl(game):
+    # bowl dispenser R is at (2,7)
     game.agent1_pos = [2, 6]
     game.agent1_dir = (0, 1)
     game.step(5, 0)
     assert game.agent1_holding == "bowl"
 
 def test_put_ingredient_in_pot(game):
+    # stand left of pot P at (10,3) and interact right
     game.agent1_pos = [9, 3]
     game.agent1_dir = (1, 0)
     game.agent1_holding = "onion"
@@ -119,6 +123,7 @@ def test_fill_bowl_from_finished_pot(game):
     assert game.pot_tomatoes == 0
 
 def test_serve_correct_order(game):
+    # serving station S is at (3,0)
     game.active_orders = [
         {"meal": "onion-soup", "onions": 1, "tomatoes": 0, "start": 0, "deadline": 1000, "served": False}
     ]
@@ -178,6 +183,7 @@ def test_serve_burnt_soup(game):
     assert reward < 0
 
 def test_trash_item(game):
+    # garbage G is at (10,6)
     game.agent1_pos = [9, 6]
     game.agent1_dir = (1, 0)
     game.agent1_holding = "onion"
