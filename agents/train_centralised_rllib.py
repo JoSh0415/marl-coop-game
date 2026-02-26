@@ -24,7 +24,7 @@ def get_nested(d, path, default=None):
         cur = cur[p]
     return cur
 
-def train_centralised(level_name="level_2"):
+def train_centralised(level_name="level_1"):
     EXPERIMENT_NAME = f"ppo_centralised_{level_name}"
 
     models_dir = os.path.abspath(f"models/{EXPERIMENT_NAME}")
@@ -188,4 +188,4 @@ def train_centralised(level_name="level_2"):
 
 
 if __name__ == "__main__":
-    train_centralised(level_name="level_2")
+    train_centralised(level_name="level_1")

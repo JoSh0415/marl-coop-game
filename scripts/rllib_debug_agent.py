@@ -43,13 +43,13 @@ def debug_agent():
     ray.init(ignore_reinit_error=True, include_dashboard=False, log_to_driver=False)
 
     # Set seed for reproducibility
-    SEED = 12347
+    SEED = 12346
 
     # Create the environment with rendering enabled
     # RLlib wrapper already returns stacked observations
     env = GymCoopEnvRLlib(
         {
-            "level_name": "level_2",
+            "level_name": "level_1",
             "stack_n": 4,
             "render": True,
         }
@@ -57,7 +57,7 @@ def debug_agent():
     obs, info = env.reset(seed=SEED)
 
     # Load the trained PPO model
-    checkpoint_dir = os.path.abspath("models/ppo_centralised_level_2/checkpoints/checkpoint_7000000")
+    checkpoint_dir = os.path.abspath("models/ppo_centralised_level_1/checkpoints/checkpoint_9000000")
 
     if not os.path.exists(checkpoint_dir):
         print(f"Error: checkpoint not found at {checkpoint_dir}")
