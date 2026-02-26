@@ -15,7 +15,7 @@ class GymCoopEnvRLlib(gym.Env):
 
         config = config or {}
 
-        self.level_name = config.get("level_name", "level_1")
+        self.level_name = config.get("level_name", "level_3")
         self.env_render = bool(config.get("render", False))
         self.stack_n = int(config.get("stack_n", 4))
         self.debug_seeds = bool(config.get("debug_seeds", False))

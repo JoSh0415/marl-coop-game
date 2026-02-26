@@ -288,7 +288,7 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--episodes", type=int, default=500)  # validation default
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--levels", nargs="+", default=["level_1"])
+    parser.add_argument("--levels", nargs="+", default=["level_3"])
     parser.add_argument("--stack-n", type=int, default=4)
     parser.add_argument("--deterministic", action="store_true", default=True)
     parser.add_argument("--no-deterministic", action="store_false", dest="deterministic")
