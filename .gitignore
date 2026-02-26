@@ -2,3 +2,4 @@
 __pycache__
 
 models/*/ppo_model_*
+models/*/checkpoints/checkpoint_*
