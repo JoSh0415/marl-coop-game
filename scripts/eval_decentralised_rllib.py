@@ -17,7 +17,7 @@ import ray
 from ray.tune.registry import register_env
 from ray.rllib.algorithms.algorithm import Algorithm
 
-from environment.gym_wrapper_rllib import GymCoopEnvRLlib
+from environment.gym_wrapper_rllib_decentralised import GymCoopEnvRLlibDecentralised
 
 # Function: Convert action index to movement delta (dx, dy)
 def action_to_delta(action):
@@ -77,7 +77,7 @@ def calculate_rate(results, key):
 def run_episode(algo, level_name, seed, deterministic, stack_n, max_steps_cap):
 
     # Create the environment and reset it
-    gym_env = GymCoopEnvRLlib(
+    gym_env = GymCoopEnvRLlibDecentralised(
         {
             "level_name": level_name,
             "stack_n": stack_n,
@@ -119,11 +119,20 @@ def run_episode(algo, level_name, seed, deterministic, stack_n, max_steps_cap):
             truncated = True
             break
 
-        # Run the policy inference from the current observation
-        action = algo.compute_single_action(obs, explore=not deterministic)
+        # Run the policy inference from the current observations
+        action_1 = algo.compute_single_action(
+            obs["agent_1"],
+            policy_id="agent_1_policy",
+            explore=not deterministic,
+        )
+        action_2 = algo.compute_single_action(
+            obs["agent_2"],
+            policy_id="agent_2_policy",
+            explore=not deterministic,
+        )
 
-        a1 = int(action[0])
-        a2 = int(action[1])
+        a1 = int(action_1)
+        a2 = int(action_2)
 
         # Collision attempt count
         dx1, dy1 = action_to_delta(a1)
@@ -191,17 +200,23 @@ def run_episode(algo, level_name, seed, deterministic, stack_n, max_steps_cap):
                         wrong_pot_add_seeds.append(seed)
 
         # Take the step in the environment
-        obs, reward, term, trunc, info = gym_env.step(np.array([a1, a2], dtype=np.int64))
+        obs, rewards, terms, truncs, info = gym_env.step(
+            {
+                "agent_1": a1,
+                "agent_2": a2,
+            }
+        )
 
-        total_reward += float(reward)
+        # Shared team reward is duplicated for both agents, so only count one copy
+        total_reward += float(rewards["agent_1"])
         steps += 1
 
-        terminated = bool(term)
-        truncated = bool(trunc)
+        terminated = bool(terms["__all__"])
+        truncated = bool(truncs["__all__"])
         if terminated or truncated:
             done = True
 
-        # Count stuck penalty steps (if you add this back later)
+        # Count stuck penalty steps
         if hasattr(raw_env, "stuck_steps") and raw_env.stuck_steps >= 80:
             stuck_penalty_steps += 1
 
@@ -286,7 +301,7 @@ if __name__ == "__main__":
     # Parse command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", type=str, required=True)
-    parser.add_argument("--episodes", type=int, default=500)  # validation default
+    parser.add_argument("--episodes", type=int, default=500)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--levels", nargs="+", default=["level_3"])
     parser.add_argument("--stack-n", type=int, default=4)
@@ -305,9 +320,9 @@ if __name__ == "__main__":
 
     # Register env so restore works
     def env_creator(env_config):
-        return GymCoopEnvRLlib(env_config)
+        return GymCoopEnvRLlibDecentralised(env_config)
 
-    register_env("marl_coop_centralised", env_creator)
+    register_env("marl_coop_decentralised", env_creator)
 
     # Start Ray and restore the trained algorithm
     ray.init(ignore_reinit_error=True, include_dashboard=False, log_to_driver=False)
@@ -317,7 +332,7 @@ if __name__ == "__main__":
     os.makedirs(args.out_dir, exist_ok=True)
 
     for level in args.levels:
-        # Run evaluations for this level
+        # Run evaluations
         all_results = []
         for i in range(args.episodes):
             current_seed = args.seed + i

@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ray
 from ray.rllib.algorithms.algorithm import Algorithm
-from environment.gym_wrapper_rllib import GymCoopEnvRLlib
+from environment.gym_wrapper_rllib_centralised import GymCoopEnvRLlibCentralised
 from ray.tune.registry import register_env
 import torch
 from ray.rllib.core.columns import Columns
@@ -26,7 +26,7 @@ def draw_text(screen, text, x, y, size=20, color=WHITE):
 
 # Function: Create the RLlib environment
 def env_creator(env_config):
-    return GymCoopEnvRLlib(env_config)
+    return GymCoopEnvRLlibCentralised(env_config)
 
 # Main function to run the RLlib debug agent
 def debug_agent():
@@ -45,9 +45,8 @@ def debug_agent():
     # Set seed for reproducibility
     SEED = 10021
 
-    # Create the environment with rendering enabled
-    # RLlib wrapper already returns stacked observations
-    env = GymCoopEnvRLlib(
+    # Create the environment
+    env = GymCoopEnvRLlibCentralised(
         {
             "level_name": "level_3",
             "stack_n": 4,
@@ -88,8 +87,8 @@ def debug_agent():
                         step_once = True
 
         if not paused or step_once:
-            # Predict action using the RLlib policy
-            # explore=False for consistent behavior during debugging
+            
+            # Predict action
             action = algo.compute_single_action(obs, explore=False)
 
             obs, reward, terminated, truncated, info = env.step(action)
