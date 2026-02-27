@@ -7,7 +7,7 @@ from .env import CoopEnv, find_char
 from .levels import LEVELS
 
 
-class GymCoopEnvRLlib(gym.Env):
+class GymCoopEnvRLlibCentralised(gym.Env):
     _instance_counter = 0
 
     def __init__(self, config=None):
@@ -28,8 +28,8 @@ class GymCoopEnvRLlib(gym.Env):
         if vector_index is None:
             vector_index = int(config.get("env_rank", -1))
         if vector_index is None or int(vector_index) < 0:
-            vector_index = GymCoopEnvRLlib._instance_counter
-            GymCoopEnvRLlib._instance_counter += 1
+            vector_index = GymCoopEnvRLlibCentralised._instance_counter
+            GymCoopEnvRLlibCentralised._instance_counter += 1
         vector_index = int(vector_index)
         self.worker_index = worker_index
         self.vector_index = vector_index

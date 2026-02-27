@@ -12,8 +12,9 @@ import ray
 from ray.tune.registry import register_env
 from ray.rllib.algorithms.ppo import PPOConfig
 from ray.tune.logger import UnifiedLogger
+from ray.rllib.policy.policy import PolicySpec
 
-from environment.gym_wrapper_rllib_centralised import GymCoopEnvRLlibCentralised
+from environment.gym_wrapper_rllib_decentralised import GymCoopEnvRLlibDecentralised
 
 # Function: Get nested dictionary values
 def get_nested(d, path, default=None):
@@ -24,8 +25,12 @@ def get_nested(d, path, default=None):
         cur = cur[p]
     return cur
 
-def train_centralised(level_name="level_3"):
-    EXPERIMENT_NAME = f"ppo_centralised_{level_name}"
+# Function: Map each environment agent to its own policy
+def policy_mapping_fn(agent_id, *args, **kwargs):
+    return "agent_1_policy" if agent_id == "agent_1" else "agent_2_policy"
+
+def train_decentralised(level_name="level_1"):
+    EXPERIMENT_NAME = f"ppo_decentralised_{level_name}"
 
     models_dir = os.path.abspath(f"models/{EXPERIMENT_NAME}")
     log_dir = "logs"
@@ -41,12 +46,25 @@ def train_centralised(level_name="level_3"):
 
     # Function: Create the RLlib environment
     def env_creator(env_config):
-        return GymCoopEnvRLlibCentralised(env_config)
+        return GymCoopEnvRLlibDecentralised(env_config)
 
-    register_env("marl_coop_centralised", env_creator)
+    register_env("marl_coop_decentralised", env_creator)
 
     # Start Ray
     ray.init(ignore_reinit_error=True, include_dashboard=False, log_to_driver=False)
+
+    # Build a dummy env to get the single-agent spaces for the policies
+    dummy_env = GymCoopEnvRLlibDecentralised(
+        {
+            "level_name": level_name,
+            "stack_n": 4,
+            "render": False,
+            "base_seed": TRAIN_SEED,
+            "seed_envs_per_runner": 8,
+        }
+    )
+    single_obs_space = dummy_env.single_observation_space
+    single_action_space = dummy_env.single_action_space
 
     # PPO config
     cfg = (
@@ -56,12 +74,13 @@ def train_centralised(level_name="level_3"):
             enable_env_runner_and_connector_v2=False,
         )
         .environment(
-            env="marl_coop_centralised",
+            env="marl_coop_decentralised",
             env_config={
                 "level_name": level_name,
                 "stack_n": 4,
                 "render": False,
                 "base_seed": TRAIN_SEED,
+                "seed_envs_per_runner": 8,
             },
             disable_env_checking=True,
         )
@@ -74,6 +93,23 @@ def train_centralised(level_name="level_3"):
         .framework("torch")
         .resources(num_gpus=0)
         .debugging(seed=TRAIN_SEED)
+        .multi_agent(
+            policies={
+                "agent_1_policy": PolicySpec(
+                    observation_space=single_obs_space,
+                    action_space=single_action_space,
+                    config={},
+                ),
+                "agent_2_policy": PolicySpec(
+                    observation_space=single_obs_space,
+                    action_space=single_action_space,
+                    config={},
+                ),
+            },
+            policy_mapping_fn=policy_mapping_fn,
+            policies_to_train=["agent_1_policy", "agent_2_policy"],
+            count_steps_by="env_steps",
+        )
     )
 
     # Keep PPO updates simple and stable on CPU
@@ -165,8 +201,11 @@ def train_centralised(level_name="level_3"):
         if len_mean is None:
             len_mean = get_nested(result, "env_runners/episode_len_mean", 0.0)
 
+        reward_mean = float(reward_mean) / 2.0 if reward_mean is not None else 0.0
+        len_mean = float(len_mean) if len_mean is not None else 0.0
+
         print("-----------------------------------------------")
-        print(f"t = {steps} steps\navg_reward = {float(reward_mean):.3f}\navg_len = {float(len_mean):.1f}")
+        print(f"t = {steps} steps\navg_reward = {reward_mean:.3f}\navg_len = {len_mean:.1f}")
         print("-----------------------------------------------")
 
         if steps >= next_save:
@@ -188,4 +227,4 @@ def train_centralised(level_name="level_3"):
 
 
 if __name__ == "__main__":
-    train_centralised(level_name="level_3")
+    train_decentralised(level_name="level_1")
