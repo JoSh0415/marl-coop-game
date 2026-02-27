@@ -29,7 +29,7 @@ def get_nested(d, path, default=None):
 def policy_mapping_fn(agent_id, *args, **kwargs):
     return "agent_1_policy" if agent_id == "agent_1" else "agent_2_policy"
 
-def train_decentralised(level_name="level_1"):
+def train_decentralised(level_name="level_3"):
     EXPERIMENT_NAME = f"ppo_decentralised_{level_name}"
 
     models_dir = os.path.abspath(f"models/{EXPERIMENT_NAME}")
@@ -227,4 +227,4 @@ def train_decentralised(level_name="level_1"):
 
 
 if __name__ == "__main__":
-    train_decentralised(level_name="level_1")
+    train_decentralised(level_name="level_3")
