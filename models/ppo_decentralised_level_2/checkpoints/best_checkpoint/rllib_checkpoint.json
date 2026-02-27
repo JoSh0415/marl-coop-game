@@ -1,0 +1,1 @@
+{"type": "Algorithm", "checkpoint_version": "1.1", "format": "cloudpickle", "state_file": "/Users/mcallanan1/Portfolio-Projects/marl-coop-game/models/ppo_decentralised_level_2/checkpoints/checkpoint_8000000/algorithm_state.pkl", "policy_ids": ["agent_2_policy", "agent_1_policy"], "ray_version": "2.54.0", "ray_commit": "48bd1f8fa43d0e8222b0f57357b99b48c7437ed3"}
