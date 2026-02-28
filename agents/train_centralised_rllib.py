@@ -13,7 +13,7 @@ from ray.tune.registry import register_env
 from ray.rllib.algorithms.ppo import PPOConfig
 from ray.tune.logger import UnifiedLogger
 
-from environment.gym_wrapper_rllib import GymCoopEnvRLlib
+from environment.gym_wrapper_rllib_centralised import GymCoopEnvRLlibCentralised
 
 # Function: Get nested dictionary values
 def get_nested(d, path, default=None):
@@ -41,7 +41,7 @@ def train_centralised(level_name="level_3"):
 
     # Function: Create the RLlib environment
     def env_creator(env_config):
-        return GymCoopEnvRLlib(env_config)
+        return GymCoopEnvRLlibCentralised(env_config)
 
     register_env("marl_coop_centralised", env_creator)
 
