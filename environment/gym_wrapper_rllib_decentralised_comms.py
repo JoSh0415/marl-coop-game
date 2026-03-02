@@ -264,29 +264,28 @@ class GymCoopEnvRLlibDecentralisedComms(MultiAgentEnv):
     def _masked_block(self, length):
         return [-1.0] * length
 
-    # Function: Summarise handoff-counter contents for communication signal
-    def _handoff_summary(self):
-        ho = ht = hb = hs = 0
+    # Function: Summarise teammate task-state for communication signal
+    def _teammate_task_state(self, agent_index):
+        if agent_index == 0:
+            teammate_holding = self.env.agent2_holding
+        else:
+            teammate_holding = self.env.agent1_holding
 
-        for (wx, wy), item in self.env.wall_items.items():
-            if not self.env._is_handoff_counter((wx, wy)):
-                continue
+        has_onion = 0.0
+        has_tomato = 0.0
+        has_bowl = 0.0
+        has_ready_soup = 0.0
 
-            if item == "onion":
-                ho += 1
-            elif item == "tomato":
-                ht += 1
-            elif item == "bowl":
-                hb += 1
-            elif isinstance(item, str) and item.startswith("bowl-done-"):
-                hs += 1
+        if teammate_holding == "onion":
+            has_onion = 1.0
+        elif teammate_holding == "tomato":
+            has_tomato = 1.0
+        elif teammate_holding == "bowl":
+            has_bowl = 1.0
+        elif isinstance(teammate_holding, str) and teammate_holding.startswith("bowl-done-"):
+            has_ready_soup = 1.0
 
-        return [
-            float(np.clip(ho / 5.0, 0.0, 1.0)),
-            float(np.clip(ht / 5.0, 0.0, 1.0)),
-            float(np.clip(hb / 5.0, 0.0, 1.0)),
-            float(np.clip(hs / 5.0, 0.0, 1.0)),
-        ]
+        return [has_onion, has_tomato, has_bowl, has_ready_soup]
 
     def _get_obs(self, raw_obs, agent_index):
         agent_view = raw_obs[agent_index]
@@ -398,10 +397,8 @@ class GymCoopEnvRLlibDecentralisedComms(MultiAgentEnv):
                 order_time_left = np.clip(float(raw_time) / 600.0, 0.0, 1.0)
         order_time_left = float(np.clip(order_time_left, 0.0, 1.0))
 
-        # Handoff summary
-        # Unmasked in the communication wrapper so agents receive
-        # global shared-counter state as a stigmergic signal.
-        handoff_summary = self._handoff_summary()
+        # Teammate Task-State Communication Signal
+        teammate_task_state = self._teammate_task_state(agent_index)
 
         obs = (
             [(dv1 + 1) / 2.0, (dw1 + 1) / 2.0]  # self dirs
@@ -415,7 +412,7 @@ class GymCoopEnvRLlibDecentralisedComms(MultiAgentEnv):
             + pot_contents  # pot ingredient counts
             + [pot_timer_norm]  # pot timer
             + [order_time_left, target_on, target_to]  # order info
-            + handoff_summary  # handoff summary (unmasked)
+            + teammate_task_state  # teammate task state
         )
 
         return np.array(obs, dtype=np.float32)
