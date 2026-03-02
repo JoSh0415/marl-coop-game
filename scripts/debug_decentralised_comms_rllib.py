@@ -46,7 +46,7 @@ def debug_agent():
     # Create the environment
     env = GymCoopEnvRLlibDecentralisedComms(
         {
-            "level_name": "level_2",
+            "level_name": "level_1",
             "stack_n": 4,
             "render": True,
         }
@@ -54,7 +54,7 @@ def debug_agent():
     obs, info = env.reset(seed=SEED)
 
     # Load the trained PPO model
-    checkpoint_dir = os.path.abspath("models/ppo_decentralised_comms_level_2/checkpoints/checkpoint_10000000")
+    checkpoint_dir = os.path.abspath("models/ppo_decentralised_comms_level_1/checkpoints/checkpoint_7000000")
 
     if not os.path.exists(checkpoint_dir):
         print(f"Error: checkpoint not found at {checkpoint_dir}")
@@ -163,26 +163,6 @@ def debug_agent():
         draw_text(screen, f"A1 Hold: {env.env.agent1_holding}", base_x, y)
         y += gap
         draw_text(screen, f"A2 Hold: {env.env.agent2_holding}", base_x, y)
-        y += int(gap * 1.5)
-
-        # Stigmergic Dashboard Visualization
-        draw_text(screen, "PARTITION SENSORS", base_x, y, color=(100, 200, 255))
-        y += gap
-        
-        # Pull the live handoff summary from the environment
-        dashboard = env._handoff_summary()
-        dash_onion  = "YES" if dashboard[0] > 0 else "NO"
-        dash_tomato = "YES" if dashboard[1] > 0 else "NO"
-        dash_bowl   = "YES" if dashboard[2] > 0 else "NO"
-        dash_soup   = "YES" if dashboard[3] > 0 else "NO"
-        
-        draw_text(screen, f"Onion:  {dash_onion}", base_x, y, color=GREEN if dashboard[0] > 0 else WHITE)
-        y += gap
-        draw_text(screen, f"Tomato: {dash_tomato}", base_x, y, color=GREEN if dashboard[1] > 0 else WHITE)
-        y += gap
-        draw_text(screen, f"Bowl:   {dash_bowl}", base_x, y, color=GREEN if dashboard[2] > 0 else WHITE)
-        y += gap
-        draw_text(screen, f"Soup:   {dash_soup}", base_x, y, color=GREEN if dashboard[3] > 0 else WHITE)
         y += int(gap * 1.5)
 
         # Order info
