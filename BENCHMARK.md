@@ -14,12 +14,19 @@ The project compares three PPO-based multi-agent setups in the same two-agent co
    - Two separate policies, one per agent.
    - Shared team reward.
    - Each agent sees its own local / embodied features plus shared public task-state features.
-   - This is the main no-comms baseline.
+   - Teammate-private action-ready information is masked out.
+   - This is the strict no-comms baseline.
 
-2. **Decentralised PPO + communication**
-   - Same decentralised setup as above, but with a small explicit message channel.
-   - This is the next planned experiment.
-   - It should stay clearly decentralised: communication is the only extra information source.
+2. **Decentralised PPO + task-state communication**
+   - Same decentralised setup as above: still two separate policies and still decentralised at execution.
+   - Same `Discrete(6)` action space as the no-comms baseline.
+   - The only intentional extra information is a small 4-slot teammate task-state signal.
+   - That signal says whether the teammate is currently holding:
+     - an onion
+     - a tomato
+     - a bowl
+     - a ready soup
+   - It is a lightweight communication add-on, not full state sharing.
 
 3. **Fully centralised PPO**
    - A single joint controller chooses both agents' actions from a shared joint observation.
@@ -48,14 +55,17 @@ The intended differences are:
 - **Observation design**
   - Centralised PPO uses a shared joint observation.
   - Decentralised PPO uses per-agent observations derived from the same base state, but without teammate-private action-ready information.
+  - The task-state comms variant keeps the same decentralised policy structure, but fills the final 4-slot comparison block with a coarse teammate task-state signal.
 
 - **Policy structure**
   - Centralised PPO uses one joint policy.
   - Decentralised PPO uses two separate policies (`agent_1_policy`, `agent_2_policy`).
+  - Decentralised PPO + task-state communication also uses two separate policies.
 
 - **Communication**
-  - Only the comms variant will add an explicit message channel.
-  - It should not add direct access to hidden state.
+  - The no-comms baseline masks the communication block.
+  - The task-state comms variant exposes only a 4-slot teammate holding summary.
+  - It does **not** expose teammate position, direction, front-tile features, BFS distances, or a full second local view.
 
 In short: the task is frozen, while the information available to the learner is the thing being varied on purpose.
 
@@ -133,7 +143,7 @@ The base 74-feature layout is:
 | Pot state | 4 | One-hot pot state |
 | Pot contents + timer | 3 | Onion count, tomato count, timer |
 | Order info | 3 | Most urgent order summary |
-| Handoff summary | 4 | Summary of handoff-counter contents |
+| Final comparison block | 4 | Wrapper-dependent 4-slot block |
 | **Total** | **74** | |
 
 ### 4.1 Fully centralised observation
@@ -173,16 +183,41 @@ Masked features:
 - teammate holding slots
 - teammate front-tile block
 - teammate BFS block
-- handoff summary block
+- final 4-slot comparison block
 
 Masked values use a sentinel `-1.0` so the shape stays aligned with the centralised baseline without leaking teammate-private information.
 
 This means the no-comms baseline is not fully blind, but it is still properly decentralised at execution. It gets public task-state information, not the other agent's local action-ready state.
 
+### 4.3 Decentralised PPO + task-state communication
+
+In the communication wrapper (`environment/gym_wrapper_rllib_decentralised_comms.py`), the overall 74-slot shape is still kept exactly the same.
+
+The live blocks are the same as the no-comms decentralised baseline **except** for the final 4-slot comparison block.
+
+Instead of being masked, those final 4 slots are filled with a coarse teammate task-state signal:
+
+- `1` if the teammate is holding an onion, else `0`
+- `1` if the teammate is holding a tomato, else `0`
+- `1` if the teammate is holding a bowl, else `0`
+- `1` if the teammate is holding a ready soup, else `0`
+
+Important constraints:
+
+- teammate direction is still masked
+- teammate front-tile features are still masked
+- teammate BFS distances are still masked
+- teammate full holding one-hot is still masked
+- the agents still act independently with separate policies
+- there is no extra message action head
+
+So the comms variant is still decentralised, but it adds a small, dense coordination signal about what the teammate is currently carrying.
+
 ### Action spaces
 
 - **Centralised PPO:** `MultiDiscrete([6, 6])`
 - **Decentralised PPO:** `Discrete(6)` per agent
+- **Decentralised PPO + task-state communication:** `Discrete(6)` per agent
 
 Shared action meanings:
 
@@ -296,6 +331,18 @@ The final benchmark uses RLlib PPO for all official runs.
 - `count_steps_by = "env_steps"` so the training scale matches the centralised setup
 - total training budget: **10M env steps**
 
+### Decentralised PPO + task-state communication
+
+- wrapper: `environment/gym_wrapper_rllib_decentralised_comms.py`
+- script: dedicated decentralised communication RLlib training script in `agents/`
+- still two separate policies:
+  - `agent_1_policy`
+  - `agent_2_policy`
+- shared team reward duplicated to both agents
+- same `count_steps_by = "env_steps"`
+- same 10M step budget
+- same PPO family as the other variants
+
 Checkpoints are saved every **500k env steps**.
 
 ---
@@ -317,6 +364,7 @@ The final 2500-episode test set is disjoint from the checkpoint-selection sweep.
 
 - Centralised PPO uses `explore=False` in RLlib (same intent as `deterministic=True` in SB3)
 - Decentralised PPO also uses `explore=False`
+- Decentralised PPO + task-state communication also uses `explore=False`
 - Frame stacking stays at 4 for both training and evaluation
 
 ### Checkpoint selection rule
@@ -333,7 +381,7 @@ So the final rule is:
   3. then lower `failed_orders`
   4. then earlier checkpoint if still tied
 
-This is what was used to select the final decentralised checkpoints in a way that reflects stable task completion rather than a handful of lucky perfect episodes.
+This is what was used to select the final checkpoints in a way that reflects stable task completion rather than a handful of lucky perfect episodes.
 
 ### Output files
 
@@ -362,8 +410,6 @@ Centralised ordering:
 
 **level_3 < level_1 < level_2**
 
-Level 2 is the strongest under the joint controller, which makes sense because the partition encourages stable role specialisation when the controller can see the full state.
-
 ### 8.2 Pure decentralised PPO (no comms)
 
 Chosen checkpoints and final 2500-episode deterministic results:
@@ -378,9 +424,19 @@ Decentralised ordering:
 
 **level_2 < level_1 < level_3**
 
-This is the main structural result so far. The no-comms independent learners struggle badly in the partitioned handoff layout, are also weak in the bottleneck layout, but perform strongly in the more open obstacle layout.
+### 8.3 Decentralised PPO + task-state communication
 
-That contrast is the main reason the communication variant is worth testing next.
+Chosen checkpoints and final 2500-episode deterministic results:
+
+| Level | Checkpoint | Perfect rate | Score mean | Failed orders mean | Total reward mean |
+|:------|-----------:|-------------:|-----------:|-------------------:|------------------:|
+| level_1 | 7.0M | 0.9668 | 2.9592 | 0.0408 | 78.343172 |
+| level_2 | 10.0M | 0.3212 | 2.0860 | 0.9140 | 51.656264 |
+| level_3 | 6.5M | 0.6792 | 2.4384 | 0.5616 | 61.558548 |
+
+Task-state comms ordering:
+
+**level_2 < level_3 < level_1**
 
 ---
 
@@ -398,7 +454,8 @@ The following are now frozen for the benchmark:
 - validation and final-test seed splits
 - centralised observation wrapper
 - pure decentralised observation wrapper
+- decentralised task-state communication wrapper
 
-The communication variant can add an explicit message mechanism, but it should keep the same task, reward function, training budget, and evaluation protocol.
+At this point the task, the benchmark protocol, and the three final algorithm setups are locked.
 
-That way any gain can be attributed to communication rather than to a different task definition.
+That means the remaining work is analysis, plotting, behaviour review, and writing up the results clearly rather than changing the benchmark again.
