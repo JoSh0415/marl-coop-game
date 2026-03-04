@@ -4,7 +4,7 @@ This repository contains the code for my final-year project on multi-agent reinf
 
 The project is not just about getting a policy to score highly. The main aim is to compare different coordination setups in a controlled way and see how much the learning setup itself changes performance.
 
-The current study compares PPO-based controllers under the same task, reward design, and levels.
+The current study compares three PPO-based controllers under the same task, reward design, and levels.
 
 ---
 
@@ -28,7 +28,7 @@ The research question is basically: **how much does coordination change when I c
 
 ---
 
-## Current algorithm setups
+## Final algorithm setups
 
 The project uses PPO in RLlib for all official results.
 
@@ -45,45 +45,49 @@ The project uses PPO in RLlib for all official results.
 - Each agent sees its own local / embodied features plus shared public task-state features.
 - Teammate-private action-ready information is masked out.
 
-This is the main no-comms baseline.
+### 3. Decentralised PPO + task-state communication
 
-### 3. Decentralised PPO + communication
+- Same decentralised setup: still two separate policies and still decentralised at execution.
+- Adds a small 4-slot teammate task-state signal in the final observation block.
+- That signal only tells the agent whether the teammate is currently holding:
+  - an onion
+  - a tomato
+  - a bowl
+  - a ready soup
 
-- Planned next.
-- This will keep the decentralised setup but add a small explicit message channel.
-- The goal is to test whether explicit communication helps most in the layouts where pure decentralised learning struggles.
+This is a lightweight communication add-on, not full state sharing.
 
 Older Stable-Baselines3 experiments were useful while the project was being built, but the final benchmark uses RLlib so the comparison is consistent.
 
 ---
 
-## Main result so far
+## Final benchmark summary
 
-The current no-comms decentralised baseline behaves very differently depending on the level.
+The finished benchmark gives a clear three-way comparison across all three levels.
 
-### Centralised PPO (final 2500-episode results)
+### Fully centralised PPO (final 2500-episode results)
 
-- **level_1:** perfect rate `0.9584`, score mean `2.9388`
-- **level_2:** perfect rate `0.9888`, score mean `2.9888`
-- **level_3:** perfect rate `0.9100`, score mean `2.8660`
-
-Centralised ordering:
-
-**level_3 < level_1 < level_2**
+| Level | Perfect rate | Score mean |
+|:------|-------------:|-----------:|
+| level_1 | 0.9584 | 2.9388 |
+| level_2 | 0.9888 | 2.9888 |
+| level_3 | 0.9100 | 2.8660 |
 
 ### Pure decentralised PPO (final 2500-episode results)
 
-- **level_1 (9M):** perfect rate `0.0040`, score mean `1.2400`
-- **level_2 (8M):** perfect rate `0.0052`, score mean `1.1596`
-- **level_3 (10M):** perfect rate `0.8752`, score mean `2.8184`
+| Level | Perfect rate | Score mean |
+|:------|-------------:|-----------:|
+| level_1 | 0.0040 | 1.2400 |
+| level_2 | 0.0052 | 1.1596 |
+| level_3 | 0.8752 | 2.8184 |
 
-Decentralised ordering:
+### Decentralised PPO + task-state communication (final 2500-episode results)
 
-**level_2 < level_1 < level_3**
-
-This is the most interesting finding in the repo at the moment.
-
-The decentralised agents are not just uniformly worse. They are much weaker in the partitioned and bottleneck layouts, but they are surprisingly strong in the open obstacle layout. That gives the communication experiment a clear purpose.
+| Level | Perfect rate | Score mean |
+|:------|-------------:|-----------:|
+| level_1 | 0.9668 | 2.9592 |
+| level_2 | 0.3212 | 2.0860 |
+| level_3 | 0.6792 | 2.4384 |
 
 ---
 
@@ -96,22 +100,25 @@ The main folders are:
   - `levels.py` - fixed layouts
   - `gym_wrapper_rllib_centralised.py` - centralised RLlib wrapper
   - `gym_wrapper_rllib_decentralised.py` - decentralised RLlib wrapper
+  - `gym_wrapper_rllib_decentralised_comms.py` - decentralised RLlib wrapper with task-state communication
 
 - `agents/`
   - `train_centralised_rllib.py` - RLlib training for the joint controller
   - `train_decentralised_rllib.py` - RLlib training for the no-comms decentralised baseline
-  - communication training script to be added next
+  - `train_decentralised_comms_rllib.py` - RLlib training script for the decentralised task-state comms variant
 
 - `scripts/`
   - `eval_centralised_rllib.py` - evaluation for the centralised benchmark
   - `eval_decentralised_rllib.py` - evaluation for the decentralised baseline
+  - `eval_decentralised_comms_rllib.py` - evaluation for the decentralised task-state comms benchmark
   - debug / visualisation scripts for checking policy behaviour
 
 - `models/`
   - saved checkpoints for training runs
+  - `best_checkpoint/` - best performing checkpoint for each level/algorithm combination
 
 - `eval_results/`
-  - per-episode CSVs and summary JSON files from evaluation sweeps
+  - best per-episode CSVs and summary JSON files from evaluation sweeps
 
 - `tests/`
   - optional environment tests / sanity checks
@@ -207,7 +214,18 @@ But they do **not** get live teammate-private information such as:
 
 Those slots are masked out.
 
-This means the no-comms baseline is genuinely decentralised at execution, while still being a fair comparison against the same underlying task.
+### Task-state comms wrapper
+
+The task-state comms wrapper keeps the same decentralised structure and the same overall observation size.
+
+The only intentional difference from the no-comms baseline is that the final 4-slot comparison block is no longer masked. Instead, it carries a coarse teammate task-state signal:
+
+- teammate holding onion
+- teammate holding tomato
+- teammate holding bowl
+- teammate holding ready soup
+
+So it is still decentralised, but it adds a small dense coordination cue.
 
 ---
 
@@ -248,7 +266,11 @@ python agents/train_centralised_rllib.py
 python agents/train_decentralised_rllib.py
 ```
 
-The communication variant will get its own training script once it is implemented.
+### Decentralised PPO + task-state communication
+
+```bash
+python agents/train_decentralised_comms_rllib.py
+```
 
 ---
 
@@ -265,14 +287,25 @@ python scripts/eval_decentralised_rllib.py \
   --deterministic
 ```
 
+### Example: decentralised task-state comms evaluation
+
+```bash
+python scripts/eval_decentralised_comms_rllib.py \
+  --checkpoint models/ppo_decentralised_comms_level_2/checkpoints/checkpoint_10000000 \
+  --episodes 2500 \
+  --seed 10000 \
+  --levels level_2 \
+  --deterministic
+```
+
 ### Example: centralised evaluation
 
 ```bash
 python scripts/eval_centralised_rllib.py \
-  --checkpoint models/ppo_centralised_level_2/checkpoints/checkpoint_9000000 \
+  --checkpoint models/ppo_centralised_level_1/checkpoints/checkpoint_9000000 \
   --episodes 2500 \
   --seed 10000 \
-  --levels level_2 \
+  --levels level_1 \
   --deterministic
 ```
 
@@ -294,13 +327,3 @@ For strong models, perfect rate is still useful.
 For weaker decentralised models, perfect episodes can be too sparse to use on their own, so checkpoint selection is based on the **best overall validation profile**, with score mean treated as the most stable signal of actual task completion.
 
 That avoids picking a weaker model just because it got a handful of lucky perfect episodes.
-
----
-
-## Current limitations
-
-- The communication variant is not finished yet.
-- The pure decentralised baseline is intentionally strict, so some layouts (especially `level_2`) are hard.
-- Results are meaningful but still depend on level structure, so conclusions have to be made per layout rather than as one single blanket statement.
-
-That is also part of the point of the project: the same algorithm design does not behave the same way under different coordination demands.
