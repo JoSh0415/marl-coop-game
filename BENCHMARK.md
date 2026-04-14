@@ -266,7 +266,7 @@ I    #    #
 
 A vertical wall splits the map. Agents cannot cross sides, so they have to coordinate through counter handoffs. This forces role separation.
 
-### level_3 - The Obstacle Course
+### level_3 - The Open Layout
 
 ```text
 #####S#####

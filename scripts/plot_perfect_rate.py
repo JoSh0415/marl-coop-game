@@ -20,8 +20,9 @@ def load_sweep_data(model, level, steps, metric):
 
 if __name__ == "__main__":
     models = ["centralised", "decentralised", "decentralised_comms"]
-    model_labels = ["Centralised", "Decentralised", "Decentralised (Comms)"]
+    model_labels = ["Centralised PPO", "Decentralised PPO", "Decentralised PPO + Comms"]
     levels = [1, 2, 3]
+    level_names = ["(Bottleneck)", "(Partition)", "(Open Layout)"]
     
     # Checkpoints every 500k up to 10M
     steps = list(range(500000, 10500000, 500000))
@@ -36,12 +37,12 @@ if __name__ == "__main__":
             y_values = load_sweep_data(model, level, steps, "perfect_rate")
             ax.plot(x_vals, y_values, marker='o', linewidth=2, markersize=6, label=model_labels[j])
 
-        ax.set_title(f"Level {level}", fontsize=14, pad=10)
-        ax.set_xlabel("Timesteps (Millions)", fontsize=12)
+        ax.set_title(f"Level {level} {level_names[i]}", fontsize=14, pad=10)
+        ax.set_xlabel("Training Steps (Millions)", fontsize=12)
         
         # Only set the Y-label on the first graph
         if i == 0:
-            ax.set_ylabel("Perfect Rate", fontsize=12)
+            ax.set_ylabel("Perfect Episode Rate", fontsize=12)
 
         # Add a buffer below 0.0 and above 1.0 so points don't sit on the border
         ax.set_ylim(-0.05, 1.05)
