@@ -5,3 +5,5 @@ models/*/ppo_model_*
 models/*/checkpoints/checkpoint_*
 
 scripts/run_eval_sweep_parallel.py
+
+eval_sweeps/*/logs/*

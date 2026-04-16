@@ -1,0 +1,141 @@
+{
+  "level": "level_1",
+  "n_episodes": 250,
+  "perfect_rate": 0.0,
+  "truncated_rate": 0.0,
+  "score_mean": 0.516,
+  "score_min": 0,
+  "score_max": 2,
+  "failed_orders": {
+    "mean": 2.484,
+    "sum": 621,
+    "max": 3.0
+  },
+  "unserved_active_end": {
+    "mean": 0.0,
+    "sum": 0,
+    "max": 0.0
+  },
+  "steps": {
+    "mean": 891.648,
+    "sum": 222912,
+    "max": 950.0
+  },
+  "total_reward": {
+    "mean": -0.17944000000012233,
+    "sum": -44,
+    "max": 39.659999999999556
+  },
+  "end_reasons": {
+    "terminated": 250
+  },
+  "events": {
+    "wrong_serve_attempts": {
+      "mean": 0.028,
+      "sum": 7,
+      "max": 1.0
+    },
+    "not_done_serve_attempts": {
+      "mean": 0.0,
+      "sum": 0,
+      "max": 0.0
+    },
+    "wrong_done_soup_pickups": {
+      "mean": 0.064,
+      "sum": 16,
+      "max": 1.0
+    },
+    "burnt_soup_pickups": {
+      "mean": 0.0,
+      "sum": 0,
+      "max": 0.0
+    },
+    "wrong_pot_adds": {
+      "mean": 2.148,
+      "sum": 537,
+      "max": 27.0
+    },
+    "wrong_pot_add_seeds": [
+      130,
+      132,
+      135,
+      139,
+      13,
+      18,
+      148,
+      150,
+      153,
+      154,
+      156,
+      30,
+      35,
+      36,
+      37,
+      168,
+      170,
+      43,
+      45,
+      48,
+      178,
+      52,
+      53,
+      184,
+      191,
+      65,
+      193,
+      195,
+      196,
+      69,
+      197,
+      71,
+      198,
+      199,
+      202,
+      75,
+      205,
+      208,
+      209,
+      83,
+      84,
+      214,
+      88,
+      92,
+      94,
+      223,
+      96,
+      97,
+      224,
+      101,
+      231,
+      234,
+      109,
+      237,
+      111,
+      240,
+      113,
+      241,
+      115,
+      244,
+      245,
+      246,
+      119,
+      125,
+      126
+    ],
+    "collision_attempts": {
+      "mean": 4.06,
+      "sum": 1015,
+      "max": 75.0
+    },
+    "stuck_penalty_steps": {
+      "mean": 0.0,
+      "sum": 0,
+      "max": 0.0
+    },
+    "both_idle_steps": {
+      "mean": 94.964,
+      "sum": 23741,
+      "max": 395.0
+    }
+  }
+}

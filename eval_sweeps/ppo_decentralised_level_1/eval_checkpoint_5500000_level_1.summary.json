@@ -1,0 +1,81 @@
+{
+  "level": "level_1",
+  "n_episodes": 250,
+  "perfect_rate": 0.0,
+  "truncated_rate": 0.0,
+  "score_mean": 0.028,
+  "score_min": 0,
+  "score_max": 2,
+  "failed_orders": {
+    "mean": 2.972,
+    "sum": 743,
+    "max": 3.0
+  },
+  "unserved_active_end": {
+    "mean": 0.0,
+    "sum": 0,
+    "max": 0.0
+  },
+  "steps": {
+    "mean": 900.396,
+    "sum": 225099,
+    "max": 950.0
+  },
+  "total_reward": {
+    "mean": -9.227159999999943,
+    "sum": -2306,
+    "max": 41.52999999999968
+  },
+  "end_reasons": {
+    "terminated": 250
+  },
+  "events": {
+    "wrong_serve_attempts": {
+      "mean": 0.008,
+      "sum": 2,
+      "max": 1.0
+    },
+    "not_done_serve_attempts": {
+      "mean": 0.0,
+      "sum": 0,
+      "max": 0.0
+    },
+    "wrong_done_soup_pickups": {
+      "mean": 0.412,
+      "sum": 103,
+      "max": 2.0
+    },
+    "burnt_soup_pickups": {
+      "mean": 0.076,
+      "sum": 19,
+      "max": 1.0
+    },
+    "wrong_pot_adds": {
+      "mean": 1.844,
+      "sum": 461,
+      "max": 167.0
+    },
+    "wrong_pot_add_seeds": [
+      160,
+      227,
+      70,
+      231,
+      175
+    ],
+    "collision_attempts": {
+      "mean": 1.844,
+      "sum": 461,
+      "max": 85.0
+    },
+    "stuck_penalty_steps": {
+      "mean": 0.0,
+      "sum": 0,
+      "max": 0.0
+    },
+    "both_idle_steps": {
+      "mean": 61.164,
+      "sum": 15291,
+      "max": 269.0
+    }
+  }
+}

@@ -99,6 +99,16 @@ def run_episode(algo, level_name, seed, deterministic, stack_n, max_steps_cap):
     b_pickup = 0
     w_add = 0
     wrong_pot_add_seeds = []
+    a1_ingredient_pickups = 0
+    a2_ingredient_pickups = 0
+    a1_valid_pot_adds = 0
+    a2_valid_pot_adds = 0
+    a1_bowl_pickups = 0
+    a2_bowl_pickups = 0
+    a1_done_soup_pickups = 0
+    a2_done_soup_pickups = 0
+    a1_serves = 0
+    a2_serves = 0
 
     # Extra diagnostics
     collision_attempts = 0
@@ -151,6 +161,9 @@ def run_episode(algo, level_name, seed, deterministic, stack_n, max_steps_cap):
         if a1 == 0 and a2 == 0:
             both_idle_steps += 1
 
+        a1_can_serve = False
+        a2_can_serve = False
+
         # Check Agent 1 serve errors
         if a1 == 5:
             tile, _ = raw_env.tile_in_front(raw_env.agent1_pos, raw_env.agent1_dir)
@@ -162,6 +175,8 @@ def run_episode(algo, level_name, seed, deterministic, stack_n, max_steps_cap):
                         nd_serve += 1
                     elif not is_wanted(raw_env, recipe):
                         w_serve += 1
+                    else:
+                        a1_can_serve = True
 
         # Check Agent 2 serve errors
         if a2 == 5:
@@ -174,6 +189,8 @@ def run_episode(algo, level_name, seed, deterministic, stack_n, max_steps_cap):
                         nd_serve += 1
                     elif not is_wanted(raw_env, recipe):
                         w_serve += 1
+                    else:
+                        a2_can_serve = True
 
         # Check Agent 1 pot errors
         if a1 == 5:
@@ -186,6 +203,8 @@ def run_episode(algo, level_name, seed, deterministic, stack_n, max_steps_cap):
                     if raw_env._get_target_order_for_pot_contents(new_on, new_to) is None:
                         w_add += 1
                         wrong_pot_add_seeds.append(seed)
+                    else:
+                        a1_valid_pot_adds += 1
 
         # Check Agent 2 pot errors
         if a2 == 5:
@@ -198,6 +217,8 @@ def run_episode(algo, level_name, seed, deterministic, stack_n, max_steps_cap):
                     if raw_env._get_target_order_for_pot_contents(new_on, new_to) is None:
                         w_add += 1
                         wrong_pot_add_seeds.append(seed)
+                    else:
+                        a2_valid_pot_adds += 1
 
         # Take the step in the environment
         obs, rewards, terms, truncs, info = gym_env.step(
@@ -222,22 +243,37 @@ def run_episode(algo, level_name, seed, deterministic, stack_n, max_steps_cap):
 
         # Check pickups after the step
         curr_h1 = raw_env.agent1_holding
+        if curr_h1 in ["onion", "tomato"] and prev_h1 not in ["onion", "tomato"]:
+            a1_ingredient_pickups += 1
+        if curr_h1 == "bowl" and prev_h1 != "bowl":
+            a1_bowl_pickups += 1
         if prev_h1 == "bowl" and isinstance(curr_h1, str) and curr_h1.startswith("bowl-"):
             _, state, recipe = get_soup_info(curr_h1)
             if state == "done":
+                a1_done_soup_pickups += 1
                 if not is_wanted(raw_env, recipe):
                     w_pickup += 1
             elif state == "burnt":
                 b_pickup += 1
 
         curr_h2 = raw_env.agent2_holding
+        if curr_h2 in ["onion", "tomato"] and prev_h2 not in ["onion", "tomato"]:
+            a2_ingredient_pickups += 1
+        if curr_h2 == "bowl" and prev_h2 != "bowl":
+            a2_bowl_pickups += 1
         if prev_h2 == "bowl" and isinstance(curr_h2, str) and curr_h2.startswith("bowl-"):
             _, state, recipe = get_soup_info(curr_h2)
             if state == "done":
+                a2_done_soup_pickups += 1
                 if not is_wanted(raw_env, recipe):
                     w_pickup += 1
             elif state == "burnt":
                 b_pickup += 1
+
+        if a1_can_serve and not (isinstance(curr_h1, str) and curr_h1.startswith("bowl-done-")):
+            a1_serves += 1
+        if a2_can_serve and not (isinstance(curr_h2, str) and curr_h2.startswith("bowl-done-")):
+            a2_serves += 1
 
         prev_h1 = curr_h1
         prev_h2 = curr_h2
@@ -288,6 +324,16 @@ def run_episode(algo, level_name, seed, deterministic, stack_n, max_steps_cap):
         "wrong_done_soup_pickups": int(w_pickup),
         "burnt_soup_pickups": int(b_pickup),
         "wrong_pot_adds": int(w_add),
+        "agent_1_ingredient_pickups": int(a1_ingredient_pickups),
+        "agent_2_ingredient_pickups": int(a2_ingredient_pickups),
+        "agent_1_valid_pot_adds": int(a1_valid_pot_adds),
+        "agent_2_valid_pot_adds": int(a2_valid_pot_adds),
+        "agent_1_bowl_pickups": int(a1_bowl_pickups),
+        "agent_2_bowl_pickups": int(a2_bowl_pickups),
+        "agent_1_done_soup_pickups": int(a1_done_soup_pickups),
+        "agent_2_done_soup_pickups": int(a2_done_soup_pickups),
+        "agent_1_serves": int(a1_serves),
+        "agent_2_serves": int(a2_serves),
 
         "collision_attempts": int(collision_attempts),
         "stuck_penalty_steps": int(stuck_penalty_steps),
@@ -371,6 +417,16 @@ if __name__ == "__main__":
                 "wrong_done_soup_pickups": calculate_stats(all_results, "wrong_done_soup_pickups"),
                 "burnt_soup_pickups": calculate_stats(all_results, "burnt_soup_pickups"),
                 "wrong_pot_adds": calculate_stats(all_results, "wrong_pot_adds"),
+                "agent_1_ingredient_pickups": calculate_stats(all_results, "agent_1_ingredient_pickups"),
+                "agent_2_ingredient_pickups": calculate_stats(all_results, "agent_2_ingredient_pickups"),
+                "agent_1_valid_pot_adds": calculate_stats(all_results, "agent_1_valid_pot_adds"),
+                "agent_2_valid_pot_adds": calculate_stats(all_results, "agent_2_valid_pot_adds"),
+                "agent_1_bowl_pickups": calculate_stats(all_results, "agent_1_bowl_pickups"),
+                "agent_2_bowl_pickups": calculate_stats(all_results, "agent_2_bowl_pickups"),
+                "agent_1_done_soup_pickups": calculate_stats(all_results, "agent_1_done_soup_pickups"),
+                "agent_2_done_soup_pickups": calculate_stats(all_results, "agent_2_done_soup_pickups"),
+                "agent_1_serves": calculate_stats(all_results, "agent_1_serves"),
+                "agent_2_serves": calculate_stats(all_results, "agent_2_serves"),
                 "wrong_pot_add_seeds": wrong_pot_add_seeds,
 
                 "collision_attempts": calculate_stats(all_results, "collision_attempts"),

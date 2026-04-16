@@ -1,0 +1,10 @@
+Level,Algorithm,Wrong Serve,Wrong Done-Soup Pickup,Burnt Soup Pickup
+Level 1 (Bottleneck),Centralised PPO,0.0,0.0,0.04
+Level 1 (Bottleneck),Decentralised PPO,2.88,0.5599999999999999,0.0
+Level 1 (Bottleneck),Decentralised PPO + Comms,0.0,0.0,0.12
+Level 2 (Partition),Centralised PPO,0.0,0.0,0.0
+Level 2 (Partition),Decentralised PPO,2.64,0.0,0.0
+Level 2 (Partition),Decentralised PPO + Comms,4.04,0.32,2.92
+Level 3 (Open Layout),Centralised PPO,5.64,5.64,1.72
+Level 3 (Open Layout),Decentralised PPO,1.2,1.7999999999999998,0.9199999999999999
+Level 3 (Open Layout),Decentralised PPO + Comms,0.48,0.48,5.4

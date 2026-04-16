@@ -17,7 +17,7 @@ The project compares three PPO-based multi-agent setups in the same two-agent co
    - Teammate-private action-ready information is masked out.
    - This is the strict no-comms baseline.
 
-2. **Decentralised PPO + task-state communication**
+2. **Decentralised PPO + lightweight teammate task-state cue**
    - Same decentralised setup as above: still two separate policies and still decentralised at execution.
    - Same `Discrete(6)` action space as the no-comms baseline.
    - The only intentional extra information is a small 4-slot teammate task-state signal.
@@ -55,16 +55,16 @@ The intended differences are:
 - **Observation design**
   - Centralised PPO uses a shared joint observation.
   - Decentralised PPO uses per-agent observations derived from the same base state, but without teammate-private action-ready information.
-  - The task-state comms variant keeps the same decentralised policy structure, but fills the final 4-slot comparison block with a coarse teammate task-state signal.
+  - The task-state cue variant keeps the same decentralised policy structure, but fills the final 4-slot comparison block with a coarse teammate task-state signal.
 
 - **Policy structure**
   - Centralised PPO uses one joint policy.
   - Decentralised PPO uses two separate policies (`agent_1_policy`, `agent_2_policy`).
-  - Decentralised PPO + task-state communication also uses two separate policies.
+  - Decentralised PPO + teammate task-state cue also uses two separate policies.
 
 - **Communication**
   - The no-comms baseline masks the communication block.
-  - The task-state comms variant exposes only a 4-slot teammate holding summary.
+  - The task-state cue variant exposes only a 4-slot teammate holding summary.
   - It does **not** expose teammate position, direction, front-tile features, BFS distances, or a full second local view.
 
 In short: the task is frozen, while the information available to the learner is the thing being varied on purpose.
@@ -189,7 +189,7 @@ Masked values use a sentinel `-1.0` so the shape stays aligned with the centrali
 
 This means the no-comms baseline is not fully blind, but it is still properly decentralised at execution. It gets public task-state information, not the other agent's local action-ready state.
 
-### 4.3 Decentralised PPO + task-state communication
+### 4.3 Decentralised PPO + lightweight teammate task-state cue
 
 In the communication wrapper (`environment/gym_wrapper_rllib_decentralised_comms.py`), the overall 74-slot shape is still kept exactly the same.
 
@@ -217,7 +217,7 @@ So the comms variant is still decentralised, but it adds a small, dense coordina
 
 - **Centralised PPO:** `MultiDiscrete([6, 6])`
 - **Decentralised PPO:** `Discrete(6)` per agent
-- **Decentralised PPO + task-state communication:** `Discrete(6)` per agent
+- **Decentralised PPO + lightweight teammate task-state cue:** `Discrete(6)` per agent
 
 Shared action meanings:
 
@@ -266,7 +266,7 @@ I    #    #
 
 A vertical wall splits the map. Agents cannot cross sides, so they have to coordinate through counter handoffs. This forces role separation.
 
-### level_3 - The Obstacle Course
+### level_3 - The Open Layout
 
 ```text
 #####S#####
@@ -331,7 +331,7 @@ The final benchmark uses RLlib PPO for all official runs.
 - `count_steps_by = "env_steps"` so the training scale matches the centralised setup
 - total training budget: **10M env steps**
 
-### Decentralised PPO + task-state communication
+### Decentralised PPO + lightweight teammate task-state cue
 
 - wrapper: `environment/gym_wrapper_rllib_decentralised_comms.py`
 - script: dedicated decentralised communication RLlib training script in `agents/`
@@ -364,7 +364,7 @@ The final 2500-episode test set is disjoint from the checkpoint-selection sweep.
 
 - Centralised PPO uses `explore=False` in RLlib (same intent as `deterministic=True` in SB3)
 - Decentralised PPO also uses `explore=False`
-- Decentralised PPO + task-state communication also uses `explore=False`
+- Decentralised PPO + lightweight teammate task-state cue also uses `explore=False`
 - Frame stacking stays at 4 for both training and evaluation
 
 ### Checkpoint selection rule
@@ -424,7 +424,7 @@ Decentralised ordering:
 
 **level_2 < level_1 < level_3**
 
-### 8.3 Decentralised PPO + task-state communication
+### 8.3 Decentralised PPO + lightweight teammate task-state cue
 
 Chosen checkpoints and final 2500-episode deterministic results:
 
@@ -434,7 +434,7 @@ Chosen checkpoints and final 2500-episode deterministic results:
 | level_2 | 10.0M | 0.3212 | 2.0860 | 0.9140 | 51.656264 |
 | level_3 | 6.5M | 0.6792 | 2.4384 | 0.5616 | 61.558548 |
 
-Task-state comms ordering:
+Task-state cue ordering:
 
 **level_2 < level_3 < level_1**
 
@@ -454,7 +454,7 @@ The following are now frozen for the benchmark:
 - validation and final-test seed splits
 - centralised observation wrapper
 - pure decentralised observation wrapper
-- decentralised task-state communication wrapper
+- decentralised task-state cue wrapper
 
 At this point the task, the benchmark protocol, and the three final algorithm setups are locked.
 

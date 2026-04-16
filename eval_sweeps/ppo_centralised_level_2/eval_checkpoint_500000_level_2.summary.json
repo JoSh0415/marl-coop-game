@@ -1,0 +1,159 @@
+{
+  "level": "level_2",
+  "n_episodes": 250,
+  "perfect_rate": 0.0,
+  "truncated_rate": 0.0,
+  "score_mean": 0.0,
+  "score_min": 0,
+  "score_max": 0,
+  "failed_orders": {
+    "mean": 3.0,
+    "sum": 750,
+    "max": 3.0
+  },
+  "unserved_active_end": {
+    "mean": 0.0,
+    "sum": 0,
+    "max": 0.0
+  },
+  "steps": {
+    "mean": 901.188,
+    "sum": 225297,
+    "max": 950.0
+  },
+  "total_reward": {
+    "mean": -16.591759999999894,
+    "sum": -4147,
+    "max": -13.539999999999884
+  },
+  "end_reasons": {
+    "terminated": 250
+  },
+  "events": {
+    "wrong_serve_attempts": {
+      "mean": 0.0,
+      "sum": 0,
+      "max": 0.0
+    },
+    "not_done_serve_attempts": {
+      "mean": 0.0,
+      "sum": 0,
+      "max": 0.0
+    },
+    "wrong_done_soup_pickups": {
+      "mean": 0.0,
+      "sum": 0,
+      "max": 0.0
+    },
+    "burnt_soup_pickups": {
+      "mean": 0.0,
+      "sum": 0,
+      "max": 0.0
+    },
+    "wrong_pot_adds": {
+      "mean": 121.232,
+      "sum": 30308,
+      "max": 761.0
+    },
+    "wrong_pot_add_seeds": [
+      1,
+      6,
+      9,
+      13,
+      15,
+      17,
+      18,
+      26,
+      30,
+      32,
+      35,
+      36,
+      37,
+      38,
+      42,
+      43,
+      45,
+      48,
+      50,
+      53,
+      61,
+      65,
+      69,
+      71,
+      74,
+      76,
+      83,
+      84,
+      88,
+      92,
+      96,
+      97,
+      99,
+      101,
+      105,
+      107,
+      109,
+      110,
+      111,
+      115,
+      135,
+      139,
+      140,
+      148,
+      150,
+      153,
+      154,
+      155,
+      156,
+      158,
+      161,
+      169,
+      170,
+      171,
+      172,
+      177,
+      178,
+      191,
+      193,
+      194,
+      195,
+      196,
+      197,
+      199,
+      201,
+      202,
+      203,
+      205,
+      207,
+      208,
+      209,
+      216,
+      218,
+      223,
+      230,
+      231,
+      236,
+      237,
+      239,
+      240,
+      241,
+      244,
+      246
+    ],
+    "collision_attempts": {
+      "mean": 0.0,
+      "sum": 0,
+      "max": 0.0
+    },
+    "stuck_penalty_steps": {
+      "mean": 0.0,
+      "sum": 0,
+      "max": 0.0
+    },
+    "both_idle_steps": {
+      "mean": 0.02,
+      "sum": 5,
+      "max": 1.0
+    }
+  }
+}

@@ -41,7 +41,7 @@ LEVELS = {
         "##R#####J##",
     ],
 
-    # 3. The Obstacle Course
+    # 3. The Open Layout
     # An open room where the stations themselves (Pot/Rack) act as central pillars.
     # Tests dynamic navigation where the workspace is also the obstacle. 
     # Agents must learn non-linear paths to avoid collisions in the center.

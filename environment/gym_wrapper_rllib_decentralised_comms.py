@@ -264,7 +264,7 @@ class GymCoopEnvRLlibDecentralisedComms(MultiAgentEnv):
     def _masked_block(self, length):
         return [-1.0] * length
 
-    # Function: Summarise teammate task-state for communication signal
+    # Function: Summarise teammate task-state for communication cue
     def _teammate_task_state(self, agent_index):
         if agent_index == 0:
             teammate_holding = self.env.agent2_holding
@@ -397,7 +397,7 @@ class GymCoopEnvRLlibDecentralisedComms(MultiAgentEnv):
                 order_time_left = np.clip(float(raw_time) / 600.0, 0.0, 1.0)
         order_time_left = float(np.clip(order_time_left, 0.0, 1.0))
 
-        # Teammate Task-State Communication Signal
+        # Teammate Task-State Cue Signal
         teammate_task_state = self._teammate_task_state(agent_index)
 
         obs = (

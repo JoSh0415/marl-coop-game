@@ -45,7 +45,7 @@ The project uses PPO in RLlib for all official results.
 - Each agent sees its own local / embodied features plus shared public task-state features.
 - Teammate-private action-ready information is masked out.
 
-### 3. Decentralised PPO + task-state communication
+### 3. Decentralised PPO + lightweight teammate task-state cue
 
 - Same decentralised setup: still two separate policies and still decentralised at execution.
 - Adds a small 4-slot teammate task-state signal in the final observation block.
@@ -81,7 +81,7 @@ The finished benchmark gives a clear three-way comparison across all three level
 | level_2 | 0.0052 | 1.1596 |
 | level_3 | 0.8752 | 2.8184 |
 
-### Decentralised PPO + task-state communication (final 2500-episode results)
+### Decentralised PPO + lightweight teammate task-state cue (final 2500-episode results)
 
 | Level | Perfect rate | Score mean |
 |:------|-------------:|-----------:|
@@ -100,17 +100,17 @@ The main folders are:
   - `levels.py` - fixed layouts
   - `gym_wrapper_rllib_centralised.py` - centralised RLlib wrapper
   - `gym_wrapper_rllib_decentralised.py` - decentralised RLlib wrapper
-  - `gym_wrapper_rllib_decentralised_comms.py` - decentralised RLlib wrapper with task-state communication
+  - `gym_wrapper_rllib_decentralised_comms.py` - decentralised RLlib wrapper with task-state cue
 
 - `agents/`
   - `train_centralised_rllib.py` - RLlib training for the joint controller
   - `train_decentralised_rllib.py` - RLlib training for the no-comms decentralised baseline
-  - `train_decentralised_comms_rllib.py` - RLlib training script for the decentralised task-state comms variant
+  - `train_decentralised_comms_rllib.py` - RLlib training script for the decentralised task-state cue variant
 
 - `scripts/`
   - `eval_centralised_rllib.py` - evaluation for the centralised benchmark
   - `eval_decentralised_rllib.py` - evaluation for the decentralised baseline
-  - `eval_decentralised_comms_rllib.py` - evaluation for the decentralised task-state comms benchmark
+  - `eval_decentralised_comms_rllib.py` - evaluation for the decentralised task-state cue benchmark
   - debug / visualisation scripts for checking policy behaviour
 
 - `models/`
@@ -214,9 +214,9 @@ But they do **not** get live teammate-private information such as:
 
 Those slots are masked out.
 
-### Task-state comms wrapper
+### Task-state cue wrapper
 
-The task-state comms wrapper keeps the same decentralised structure and the same overall observation size.
+The task-state cue wrapper keeps the same decentralised structure and the same overall observation size.
 
 The only intentional difference from the no-comms baseline is that the final 4-slot comparison block is no longer masked. Instead, it carries a coarse teammate task-state signal:
 
@@ -266,7 +266,7 @@ python agents/train_centralised_rllib.py
 python agents/train_decentralised_rllib.py
 ```
 
-### Decentralised PPO + task-state communication
+### Decentralised PPO + lightweight teammate task-state cue
 
 ```bash
 python agents/train_decentralised_comms_rllib.py
@@ -287,7 +287,7 @@ python scripts/eval_decentralised_rllib.py \
   --deterministic
 ```
 
-### Example: decentralised task-state comms evaluation
+### Example: decentralised task-state cue evaluation
 
 ```bash
 python scripts/eval_decentralised_comms_rllib.py \
