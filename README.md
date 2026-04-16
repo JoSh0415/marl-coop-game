@@ -361,6 +361,17 @@ The analysis side of the repo sits on top of saved evaluation outputs.
 - `logs/`:
   - contains `progress.csv` and other RLlib training logs, but the current dissertation plotting scripts do not read these files directly
 
+### Generated outputs
+
+The current analysis scripts generate the following files under `analytics/`:
+
+- `score_mean_over_checkpoints.png` - learning-curve view using `score_mean` across checkpoints
+- `perfect_rate_over_checkpoints.png` - learning-curve view using perfect-episode rate across checkpoints
+- `behaviour_rates_barchart.png` - behavioural diagnostics (collision attempts, wrong pot adds, both-idle steps)
+- `role_split_lollipop.png` - role-split / division-of-labour plot (Agent 1 share vs Agent 2 share)
+- `sparse_error_incidence_table.csv` - raw sparse-error incidence values
+- `sparse_error_incidence_table.md` - markdown version of the sparse-error table
+
 ### Typical workflow
 
 1. Train each RLlib controller and save checkpoints under `models/` with logs under `logs/`.
