@@ -25,7 +25,7 @@ def get_sparse_error_percentage(model, level, metric):
 
 if __name__ == "__main__":
     models = ["centralised", "decentralised", "decentralised_comms"]
-    model_labels = ["Centralised PPO", "Decentralised PPO", "Decentralised PPO + Comms"]
+    model_labels = ["Centralised PPO", "Decentralised PPO", "Decentralised PPO + Task-State Cue"]
     
     levels = [1, 2, 3]
     level_names = ["Level 1 (Bottleneck)", "Level 2 (Partition)", "Level 3 (Open Layout)"]

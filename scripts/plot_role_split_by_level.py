@@ -46,7 +46,7 @@ def extract_a1_shares(summary):
 
 if __name__ == "__main__":
     models = ["centralised", "decentralised", "decentralised_comms"]
-    model_labels = ["Centralised PPO", "Decentralised PPO", "Decentralised PPO + Comms"]
+    model_labels = ["Centralised PPO", "Decentralised PPO", "Decentralised PPO + Task-State Cue"]
     colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
 
     levels = [1, 2, 3]

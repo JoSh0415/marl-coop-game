@@ -20,7 +20,7 @@ def load_sweep_data(model, level, steps, metric):
 
 if __name__ == "__main__":
     models = ["centralised", "decentralised", "decentralised_comms"]
-    model_labels = ["Centralised PPO", "Decentralised PPO", "Decentralised PPO + Comms"]
+    model_labels = ["Centralised PPO", "Decentralised PPO", "Decentralised PPO + Task-State Cue"]
     levels = [1, 2, 3]
     level_names = ["(Bottleneck)", "(Partition)", "(Open Layout)"]
     

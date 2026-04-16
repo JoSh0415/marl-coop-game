@@ -104,7 +104,7 @@ The main folders are:
 
 - `agents/`
   - `train_centralised_rllib.py` - RLlib training for the joint controller
-  - `train_decentralised_rllib.py` - RLlib training for the no-comms decentralised baseline
+  - `train_decentralised_rllib.py` - RLlib training for the no-cue decentralised baseline
   - `train_decentralised_comms_rllib.py` - RLlib training script for the decentralised task-state cue variant
 
 - `scripts/`
@@ -230,7 +230,7 @@ Those slots are masked out.
 
 The task-state cue wrapper keeps the same decentralised structure and the same overall observation size.
 
-The only intentional difference from the no-comms baseline is that the final 4-slot comparison block is no longer masked. Instead, it carries a coarse teammate task-state signal:
+The only intentional difference from the no-cue baseline is that the final 4-slot comparison block is no longer masked. Instead, it carries a coarse teammate task-state signal:
 
 - teammate holding onion
 - teammate holding tomato
@@ -272,7 +272,7 @@ The main difference between the scripts is the policy structure and wrapper, not
 python agents/train_centralised_rllib.py
 ```
 
-### Decentralised PPO (no comms)
+### Decentralised PPO (no cue)
 
 ```bash
 python agents/train_decentralised_rllib.py

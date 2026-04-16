@@ -15,11 +15,11 @@ The project compares three PPO-based multi-agent setups in the same two-agent co
    - Shared team reward.
    - Each agent sees its own local / embodied features plus shared public task-state features.
    - Teammate-private action-ready information is masked out.
-   - This is the strict no-comms baseline.
+   - This is the strict no-cue baseline.
 
 2. **Decentralised PPO + lightweight teammate task-state cue**
    - Same decentralised setup as above: still two separate policies and still decentralised at execution.
-   - Same `Discrete(6)` action space as the no-comms baseline.
+   - Same `Discrete(6)` action space as the no-cue baseline.
    - The only intentional extra information is a small 4-slot teammate task-state signal.
    - That signal says whether the teammate is currently holding:
      - an onion
@@ -62,8 +62,8 @@ The intended differences are:
   - Decentralised PPO uses two separate policies (`agent_1_policy`, `agent_2_policy`).
   - Decentralised PPO + teammate task-state cue also uses two separate policies.
 
-- **Communication**
-  - The no-comms baseline masks the communication block.
+- **Task-state cue**
+  - The no-cue baseline masks the teammate task-state block.
   - The task-state cue variant exposes only a 4-slot teammate holding summary.
   - It does **not** expose teammate position, direction, front-tile features, BFS distances, or a full second local view.
 
@@ -187,13 +187,13 @@ Masked features:
 
 Masked values use a sentinel `-1.0` so the shape stays aligned with the centralised baseline without leaking teammate-private information.
 
-This means the no-comms baseline is not fully blind, but it is still properly decentralised at execution. It gets public task-state information, not the other agent's local action-ready state.
+This means the no-cue baseline is not fully blind, but it is still properly decentralised at execution. It gets public task-state information, not the other agent's local action-ready state.
 
 ### 4.3 Decentralised PPO + lightweight teammate task-state cue
 
 In the task-state cue wrapper (`environment/gym_wrapper_rllib_decentralised_comms.py`), the overall 74-slot shape is still kept exactly the same.
 
-The live blocks are the same as the no-comms decentralised baseline **except** for the final 4-slot comparison block.
+The live blocks are the same as the no-cue decentralised baseline **except** for the final 4-slot comparison block.
 
 Instead of being masked, those final 4 slots are filled with a coarse teammate task-state signal:
 
@@ -211,7 +211,7 @@ Important constraints:
 - the agents still act independently with separate policies
 - there is no extra message action head
 
-So the comms variant is still decentralised, but it adds a small, dense coordination signal about what the teammate is currently carrying.
+So the task-state cue variant is still decentralised, but it adds a small, dense coordination signal about what the teammate is currently carrying.
 
 ### Action spaces
 
@@ -320,7 +320,7 @@ The final benchmark uses RLlib PPO for all official runs.
 - one joint policy controlling both agents
 - total training budget: **10M env steps**
 
-### Decentralised PPO (no comms)
+### Decentralised PPO (no cue)
 
 - wrapper: `environment/gym_wrapper_rllib_decentralised.py`
 - script: `agents/train_decentralised_rllib.py`
@@ -410,7 +410,7 @@ Centralised ordering:
 
 **level_3 < level_1 < level_2**
 
-### 8.2 Pure decentralised PPO (no comms)
+### 8.2 Pure decentralised PPO (no cue)
 
 Chosen checkpoints and final 2500-episode deterministic results:
 
