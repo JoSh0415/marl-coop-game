@@ -10,7 +10,7 @@ The reward function, level layouts, episode limits, order generation, and evalua
 
 The project compares three PPO-based multi-agent setups in the same two-agent cooking task:
 
-1. **Decentralised PPO (no communication)**
+1. **Decentralised PPO (no cue)**
    - Two separate policies, one per agent.
    - Shared team reward.
    - Each agent sees its own local / embodied features plus shared public task-state features.
@@ -26,7 +26,7 @@ The project compares three PPO-based multi-agent setups in the same two-agent co
      - a tomato
      - a bowl
      - a ready soup
-   - It is a lightweight communication add-on, not full state sharing.
+   - It is a lightweight teammate task-state add-on, not full state sharing.
 
 3. **Fully centralised PPO**
    - A single joint controller chooses both agents' actions from a shared joint observation.
@@ -191,7 +191,7 @@ This means the no-comms baseline is not fully blind, but it is still properly de
 
 ### 4.3 Decentralised PPO + lightweight teammate task-state cue
 
-In the communication wrapper (`environment/gym_wrapper_rllib_decentralised_comms.py`), the overall 74-slot shape is still kept exactly the same.
+In the task-state cue wrapper (`environment/gym_wrapper_rllib_decentralised_comms.py`), the overall 74-slot shape is still kept exactly the same.
 
 The live blocks are the same as the no-comms decentralised baseline **except** for the final 4-slot comparison block.
 
@@ -334,7 +334,7 @@ The final benchmark uses RLlib PPO for all official runs.
 ### Decentralised PPO + lightweight teammate task-state cue
 
 - wrapper: `environment/gym_wrapper_rllib_decentralised_comms.py`
-- script: dedicated decentralised communication RLlib training script in `agents/`
+- script: dedicated decentralised task-state cue RLlib training script in `agents/`
 - still two separate policies:
   - `agent_1_policy`
   - `agent_2_policy`

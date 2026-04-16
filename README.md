@@ -38,7 +38,7 @@ The project uses PPO in RLlib for all official results.
 - It sees a shared joint observation of the full state.
 - This is the strongest reference baseline.
 
-### 2. Decentralised PPO (no communication)
+### 2. Decentralised PPO (no cue)
 
 - Two separate policies: one for each agent.
 - Shared team reward.
@@ -55,7 +55,7 @@ The project uses PPO in RLlib for all official results.
   - a bowl
   - a ready soup
 
-This is a lightweight communication add-on, not full state sharing.
+This is a lightweight teammate task-state add-on, not full state sharing.
 
 Older Stable-Baselines3 experiments were useful while the project was being built, but the final benchmark uses RLlib so the comparison is consistent.
 
