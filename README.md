@@ -111,14 +111,26 @@ The main folders are:
   - `eval_centralised_rllib.py` - evaluation for the centralised benchmark
   - `eval_decentralised_rllib.py` - evaluation for the decentralised baseline
   - `eval_decentralised_comms_rllib.py` - evaluation for the decentralised task-state cue benchmark
+  - `run_eval_sweep_parallel.py` - helper for running checkpoint sweep evaluations
+  - `plot_*.py` and `generate_sparse_table.py` - analysis scripts used to generate dissertation figures/tables
   - debug / visualisation scripts for checking policy behaviour
 
 - `models/`
   - saved checkpoints for training runs
   - `best_checkpoint/` - best performing checkpoint for each level/algorithm combination
 
+- `logs/`
+  - RLlib training logs per run (including `progress.csv`, `result.json`, and TensorBoard event files)
+
+- `eval_sweeps/`
+  - checkpoint sweep outputs (per-checkpoint CSV + summary JSON) used for learning-curve plots and checkpoint selection
+
 - `eval_results/`
-  - best per-episode CSVs and summary JSON files from evaluation sweeps
+  - final/best-checkpoint per-episode CSVs and summary JSON files used for locked benchmark tables and behavioural diagnostics
+
+- `analytics/`
+  - generated figures and tables used in the dissertation write-up
+  - see `analytics/README.md` for the script/input/output mapping
 
 - `tests/`
   - optional environment tests / sanity checks
@@ -327,3 +339,31 @@ For strong models, perfect rate is still useful.
 For weaker decentralised models, perfect episodes can be too sparse to use on their own, so checkpoint selection is based on the **best overall validation profile**, with score mean treated as the most stable signal of actual task completion.
 
 That avoids picking a weaker model just because it got a handful of lucky perfect episodes.
+
+---
+
+## Analysis and figures
+
+The analysis side of the repo sits on top of saved evaluation outputs.
+
+- the figure/table scripts live in `scripts/`
+- generated figure/table artifacts are saved to `analytics/`
+- detailed input/output mapping is documented in `analytics/README.md`
+
+### Analysis inputs
+
+- `eval_sweeps/`:
+  - validation checkpoint sweep outputs (`eval_checkpoint_<step>_level_<n>.summary.json` and matching CSVs)
+  - used by learning-curve plots across 500k -> 10M checkpoints
+- `eval_results/`:
+  - best/final per-episode CSVs and summary JSONs
+  - used by behavioural diagnostics, role split plots, and sparse error table generation
+- `logs/`:
+  - contains `progress.csv` and other RLlib training logs, but the current dissertation plotting scripts do not read these files directly
+
+### Typical workflow
+
+1. Train each RLlib controller and save checkpoints under `models/` with logs under `logs/`.
+2. Run validation checkpoint sweeps (250 episodes, seeds `0-249`) and save outputs under `eval_sweeps/`.
+3. Choose checkpoints using the benchmark rule, then run final deterministic evaluation (2500 episodes, seeds `10000-12499`) and save under `eval_results/`.
+4. Run the analysis scripts in `scripts/` to turn `eval_sweeps/` and `eval_results/` into dissertation-ready figures/tables in `analytics/`.
